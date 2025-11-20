@@ -82,6 +82,9 @@ const mapYoutubeiVideoToVideo = (item: any): Video | null => {
         views = `${formatJapaneseNumber(item.view_count.text)}回視聴`;
     } else if (item.short_view_count?.text) {
         views = item.short_view_count.text;
+    } else if (item.views?.text) {
+        // Handle ReelItem shorts views
+        views = item.views.text;
     }
 
     return {
@@ -288,14 +291,10 @@ export async function getChannelShorts(channelId: string): Promise<{ videos: Vid
 
 export async function getChannelPlaylists(channelId: string): Promise<{ playlists: ApiPlaylist[] }> {
     const data = await apiFetch(`channel-playlists?id=${channelId}`);
-    const playlists: ApiPlaylist[] = (data.playlists || []).map((item: any): ApiPlaylist => ({
-        id: item.id,
-        title: item.title,
-        thumbnailUrl: item.thumbnails?.[0]?.url,
-        videoCount: item.video_count ?? 0,
-        author: item.author?.name,
-        authorId: item.author?.id,
-    }));
+    // Use mapYoutubeiPlaylistToPlaylist for correct data mapping of raw API response
+    const playlists: ApiPlaylist[] = (data.playlists || [])
+        .map(mapYoutubeiPlaylistToPlaylist)
+        .filter((p): p is ApiPlaylist => p !== null);
     return { playlists };
 }
 

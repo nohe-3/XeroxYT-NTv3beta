@@ -201,9 +201,13 @@ app.get('/api/channel-shorts', async (req, res) => {
     const { id } = req.query;
     if (!id) return res.status(400).json({ error: "Missing channel id" });
     const channel = await youtube.getChannel(id);
-    const shorts = await channel.getShorts();
-    // youtubei.js usually returns an object with a 'videos' property for the feed
-    res.status(200).json(shorts.videos || []);
+    const shortsPage = await channel.getShorts();
+    
+    // Fetch shorts from the first tab's contents, as per youtubei.js v9 structure
+    // Fallback to empty array if structure doesn't match
+    const shorts = shortsPage?.contents?.[0]?.contents || [];
+    
+    res.status(200).json(shorts);
   } catch (err) { console.error('Error in /api/channel-shorts:', err); res.status(500).json({ error: err.message }); }
 });
 
@@ -213,12 +217,12 @@ app.get('/api/channel-playlists', async (req, res) => {
     const { id } = req.query;
     if (!id) return res.status(400).json({ error: "Missing channel id" });
     const channel = await youtube.getChannel(id);
-    const playlists = await channel.getPlaylists();
-    // youtubei.js returns playlists array directly or via a property depending on version.
-    // Assuming latest version returns it as 'playlists' property or directly iterable.
-    // Safe check:
-    const playlistData = playlists.playlists || playlists;
-    res.status(200).json({ playlists: playlistData });
+    const playlistsPage = await channel.getPlaylists();
+    
+    // Fetch playlists from the first tab's contents, as per youtubei.js v9 structure
+    const playlists = playlistsPage?.contents?.[0]?.contents || [];
+
+    res.status(200).json({ playlists: playlists });
   } catch (err) { console.error('Error in /api/channel-playlists:', err); res.status(500).json({ error: err.message }); }
 });
 
