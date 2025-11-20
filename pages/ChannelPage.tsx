@@ -7,6 +7,7 @@ import VideoGrid from '../components/VideoGrid';
 import VideoCard from '../components/VideoCard';
 import VideoCardSkeleton from '../components/icons/VideoCardSkeleton';
 import { useSubscription } from '../contexts/SubscriptionContext';
+import HorizontalScrollContainer from '../components/HorizontalScrollContainer';
 
 type Tab = 'home' | 'videos';
 
@@ -156,7 +157,7 @@ const ChannelPage: React.FC = () => {
         if (!homeData) return <div className="p-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yt-blue mx-auto"></div></div>;
         
         return (
-            <div className="flex flex-col gap-8 pb-10">
+            <div className="flex flex-col gap-10 pb-10">
                 {/* Featured Video */}
                 {homeData.topVideo && (
                     <div className="flex flex-col md:flex-row gap-6 border-b border-yt-spec-light-20 dark:border-yt-spec-20 pb-8">
@@ -192,10 +193,10 @@ const ChannelPage: React.FC = () => {
                     </div>
                 )}
 
-                {/* Playlists Shelves */}
+                {/* Playlists Shelves (Horizontal Scrolling) */}
                 {homeData.playlists.map((playlist: HomePlaylist, index) => (
                     <div key={index} className="flex flex-col gap-4">
-                        <h3 className="text-xl font-bold flex items-center">
+                        <h3 className="text-xl font-bold flex items-center px-2">
                             {playlist.playlistId ? (
                                 <Link to={`/playlist/${playlist.playlistId}`} className="hover:text-yt-light-gray transition-colors">
                                     {playlist.title}
@@ -204,13 +205,14 @@ const ChannelPage: React.FC = () => {
                                 <span>{playlist.title}</span>
                             )}
                         </h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-x-4 gap-y-8">
+                        
+                        <HorizontalScrollContainer>
                              {playlist.items.map(item => {
                                 if (item.videoId.startsWith('UC')) {
                                     // This is a Channel Link
                                     const iconUrl = item.icon?.startsWith('//') ? `https:${item.icon}` : item.icon;
                                     return (
-                                        <Link key={item.videoId} to={`/channel/${item.videoId}`} className="flex flex-col items-center justify-start group p-2">
+                                        <Link key={item.videoId} to={`/channel/${item.videoId}`} className="flex-shrink-0 w-32 sm:w-40 flex flex-col items-center justify-start group p-2 snap-start">
                                             <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden mb-3 bg-yt-light-gray/20 border border-yt-spec-light-10 dark:border-yt-spec-20">
                                                 {iconUrl ? (
                                                     <img src={iconUrl} alt={item.title} className="w-full h-full object-cover" />
@@ -220,29 +222,32 @@ const ChannelPage: React.FC = () => {
                                                      </div>
                                                 )}
                                             </div>
-                                            <h3 className="text-base font-bold text-center line-clamp-1 text-black dark:text-white group-hover:text-yt-light-gray transition-colors">
+                                            <h3 className="text-sm sm:text-base font-bold text-center line-clamp-2 text-black dark:text-white group-hover:text-yt-light-gray transition-colors">
                                                 {item.title}
                                             </h3>
                                             <p className="text-xs text-yt-light-gray text-center mt-1 line-clamp-1">
                                                 {item.viewCount}
                                             </p>
-                                            <div className="mt-3 px-3 py-1.5 bg-yt-light dark:bg-yt-spec-10 text-black dark:text-white text-xs font-semibold rounded-full hover:bg-yt-spec-20 transition-colors">
+                                            <div className="mt-3 px-4 py-1.5 bg-yt-light dark:bg-yt-spec-10 text-black dark:text-white text-xs font-semibold rounded-full hover:bg-yt-spec-20 transition-colors">
                                                 チャンネル登録
                                             </div>
                                         </Link>
                                     );
                                 }
 
+                                // Standard Video Card
                                 return (
-                                    <VideoCard 
-                                        key={item.videoId} 
-                                        video={mapHomeVideoToVideo(item, channelDetails)} 
-                                        hideChannelInfo={true} 
-                                    />
+                                    <div key={item.videoId} className="flex-shrink-0 w-[260px] snap-start">
+                                        <VideoCard 
+                                            video={mapHomeVideoToVideo(item, channelDetails)} 
+                                            hideChannelInfo={true} 
+                                        />
+                                    </div>
                                  );
                              })}
-                        </div>
-                        {index < homeData.playlists.length - 1 && <hr className="border-yt-spec-light-20 dark:border-yt-spec-20 mt-4" />}
+                        </HorizontalScrollContainer>
+
+                        {index < homeData.playlists.length - 1 && <hr className="border-yt-spec-light-20 dark:border-yt-spec-20 mt-2 mx-2" />}
                     </div>
                 ))}
                 
@@ -275,7 +280,9 @@ const ChannelPage: React.FC = () => {
             case 'videos':
                 return videos.length > 0 ? (
                     <>
-                        <VideoGrid videos={videos} isLoading={false} hideChannelInfo={true} />
+                        <div className="mt-6">
+                             <VideoGrid videos={videos} isLoading={false} hideChannelInfo={true} />
+                        </div>
                         <div ref={lastElementRef} className="h-20 flex justify-center items-center">
                             {isFetchingMore && <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yt-blue"></div>}
                         </div>
