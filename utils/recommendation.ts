@@ -1,4 +1,3 @@
-
 import type { Video, Channel } from '../types';
 import { searchVideos, getChannelVideos } from './api';
 
@@ -134,9 +133,10 @@ const validateVideo = (
     });
     
     // Freshness
-    if (source.preferredFreshness === 'new') {
+    // 「新規動画」の重要度を2倍にする (score += 20)
+    if (source.preferredFreshness === 'new' || true) { // Always boost fresh content slightly if no preference to ensure variety
          if (video.uploadedAt.includes('分前') || video.uploadedAt.includes('時間前') || video.uploadedAt.includes('日前')) {
-            score += 10;
+            score += 20;
         }
     }
 
@@ -167,16 +167,17 @@ export const getDeeplyAnalyzedRecommendations = async (sources: RecommendationSo
     
     const queries: Set<string> = new Set();
     
-    // 取得するクエリの総数（APIリクエスト数に直結するため制限する）
-    const TOTAL_QUERIES = 6;
+    // 取得するクエリの総数
+    const TOTAL_QUERIES = 8;
     
     // ソース群の定義と重み付け
     // weight: 選択される確率の重み
     const querySources = [
-        { type: 'history', weight: 50 }, // 履歴からの推測 (50%)
-        { type: 'subs', weight: 30 },    // 登録チャンネル関連 (30%)
-        { type: 'keywords', weight: 10 }, // 設定キーワード (10%)
-        { type: 'discovery', weight: 10 } // 新規開拓 (10%)
+        { type: 'history', weight: 40 }, 
+        { type: 'subs', weight: 25 },
+        { type: 'fresh', weight: 20 }, // 新規動画用ソースを追加
+        { type: 'keywords', weight: 10 }, 
+        { type: 'discovery', weight: 5 } 
     ];
 
     const getRandomSourceType = () => {
@@ -192,6 +193,8 @@ export const getDeeplyAnalyzedRecommendations = async (sources: RecommendationSo
     // クエリ生成ループ
     for (let i = 0; i < TOTAL_QUERIES; i++) {
         const type = getRandomSourceType();
+        const randomTopics = ['Music', 'Gaming', 'Vlog', 'Live', 'News', 'Tech', 'Art', 'Cat', 'Cooking', 'Anime'];
+        const randomTopic = randomTopics[Math.floor(Math.random() * randomTopics.length)];
 
         switch (type) {
             case 'history':
@@ -225,6 +228,11 @@ export const getDeeplyAnalyzedRecommendations = async (sources: RecommendationSo
                      queries.add('Popular');
                 }
                 break;
+            
+            case 'fresh':
+                // 新規動画を狙うクエリ
+                queries.add(`New ${randomTopic}`);
+                break;
 
             case 'keywords':
                  if (preferredGenres.length > 0) {
@@ -236,8 +244,7 @@ export const getDeeplyAnalyzedRecommendations = async (sources: RecommendationSo
 
             case 'discovery':
             default:
-                 const randomTopics = ['Music', 'Gaming', 'Vlog', 'Live', 'News', 'Tech', 'Art', 'Cat', 'Cooking'];
-                 queries.add(randomTopics[Math.floor(Math.random() * randomTopics.length)]);
+                 queries.add(randomTopic);
                  break;
         }
     }
@@ -284,7 +291,6 @@ export const getDeeplyAnalyzedRecommendations = async (sources: RecommendationSo
 
     // ---------------------------------------------------------
     // 4. Final Shuffle
-    // スコアに基づく厳密なソートよりも、ランダム性を残して「飽き」を防ぐ
     // ---------------------------------------------------------
     return shuffleArray(validVideos);
 };

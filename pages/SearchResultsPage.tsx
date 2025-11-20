@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { searchVideos } from '../utils/api';
@@ -9,6 +8,26 @@ import SearchPlaylistResultCard from '../components/SearchPlaylistResultCard';
 import ShortsShelf from '../components/ShortsShelf';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { usePreference } from '../contexts/PreferenceContext';
+
+// Helper to parse duration string to seconds (Same as Home)
+const parseDuration = (iso: string, text: string): number => {
+    if (iso) {
+        const matches = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+        if (matches) {
+            const h = parseInt(matches[1] || '0', 10);
+            const m = parseInt(matches[2] || '0', 10);
+            const s = parseInt(matches[3] || '0', 10);
+            return h * 3600 + m * 60 + s;
+        }
+    }
+    if (text) {
+         const parts = text.split(':').map(p => parseInt(p, 10));
+         if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+         if (parts.length === 2) return parts[0] * 60 + parts[1];
+         if (parts.length === 1) return parts[0];
+    }
+    return 0;
+}
 
 const SearchResultsPage: React.FC = () => {
     const [searchParams] = useSearchParams();
@@ -67,9 +86,28 @@ const SearchResultsPage: React.FC = () => {
         try {
             const results = await searchVideos(searchQuery, pageToken);
             
+            const separatedShorts: Video[] = [];
+            const separatedVideos: Video[] = [];
+
+            // Separate shorts from regular videos array
+            results.videos.forEach(v => {
+                 const sec = parseDuration(v.isoDuration, v.duration);
+                 // Consider Short if <= 60s OR contains #shorts.
+                 const isShort = (sec > 0 && sec <= 60) || v.title.toLowerCase().includes('#shorts');
+                 
+                 if (isShort) {
+                     separatedShorts.push(v);
+                 } else {
+                     separatedVideos.push(v);
+                 }
+            });
+
             // Apply Filtering
-            const filteredVideos = results.videos.filter(isContentAllowed);
-            const filteredShorts = results.shorts.filter(isContentAllowed);
+            const filteredVideos = separatedVideos.filter(isContentAllowed);
+            // Merge API separated shorts with manually separated shorts
+            const allShorts = [...results.shorts, ...separatedShorts];
+            const filteredShorts = allShorts.filter(isContentAllowed);
+            
             const filteredChannels = results.channels.filter(isContentAllowed);
             const filteredPlaylists = results.playlists.filter(isContentAllowed);
 
@@ -80,6 +118,8 @@ const SearchResultsPage: React.FC = () => {
                 setPlaylists(filteredPlaylists);
             } else {
                 setVideos(prev => [...prev, ...filteredVideos]);
+                // Append new shorts to existing shelf (optional, but good for consistency)
+                setShorts(prev => [...prev, ...filteredShorts]);
             }
             setNextPageToken(results.nextPageToken);
         } catch (err: any) {
