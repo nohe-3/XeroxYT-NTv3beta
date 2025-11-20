@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
-import { getVideoDetails, getPlayerConfig, getComments, getVideosByIds } from '../utils/api';
+import { getVideoDetails, getPlayerConfig, getComments, getVideosByIds, getExternalRelatedVideos } from '../utils/api';
 import type { VideoDetails, Video, Comment } from '../types';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { useHistory } from '../contexts/HistoryContext';
@@ -20,6 +20,7 @@ const VideoPlayerPage: React.FC = () => {
 
     const [videoDetails, setVideoDetails] = useState<VideoDetails | null>(null);
     const [comments, setComments] = useState<Comment[]>([]);
+    const [relatedVideos, setRelatedVideos] = useState<Video[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
@@ -77,16 +78,20 @@ const VideoPlayerPage: React.FC = () => {
             setError(null);
             setVideoDetails(null);
             setComments([]);
+            setRelatedVideos([]);
             window.scrollTo(0, 0);
 
             try {
                 const detailsPromise = getVideoDetails(videoId);
                 const commentsPromise = getComments(videoId);
+                const relatedPromise = getExternalRelatedVideos(videoId);
                 
-                const [details, commentsData] = await Promise.all([detailsPromise, commentsPromise]);
+                const [details, commentsData, externalRelated] = await Promise.all([detailsPromise, commentsPromise, relatedPromise]);
                 
                 setVideoDetails(details);
                 setComments(commentsData);
+                // If external API returns videos, use them. Otherwise fallback to internal related.
+                setRelatedVideos(externalRelated.length > 0 ? externalRelated : details.relatedVideos);
                 addVideoToHistory(details);
 
             } catch (err: any) {
@@ -151,7 +156,7 @@ const VideoPlayerPage: React.FC = () => {
 
     if (error && !videoDetails) {
         return (
-            <div className="flex flex-col lg:flex-row gap-6 max-w-[1280px] mx-auto px-4 md:px-6">
+            <div className="flex flex-col md:flex-row gap-6 max-w-[1280px] mx-auto px-4 md:px-6">
                 <div className="flex-grow lg:w-2/3">
                     <div className="aspect-video bg-yt-black rounded-xl overflow-hidden">
                         {videoId && playerParams && (
@@ -186,7 +191,7 @@ const VideoPlayerPage: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col lg:flex-row gap-6 max-w-[1280px] mx-auto pt-2 md:pt-6 px-4 md:px-6 justify-center">
+        <div className="flex flex-col md:flex-row gap-6 max-w-[1280px] mx-auto pt-2 md:pt-6 px-4 md:px-6 justify-center">
             <div className="flex-1 min-w-0 max-w-full">
                 {/* Video Player */}
                 <div className="w-full aspect-video bg-yt-black rounded-xl overflow-hidden shadow-lg relative z-10">
@@ -296,7 +301,7 @@ const VideoPlayerPage: React.FC = () => {
             </div>
             
             {/* Sidebar: Playlist & Related Videos */}
-            <div className="w-full lg:w-[350px] xl:w-[400px] flex-shrink-0 flex flex-col gap-4 pb-10">
+            <div className="w-full md:w-[280px] lg:w-[350px] xl:w-[400px] flex-shrink-0 flex flex-col gap-4 pb-10">
                 {currentPlaylist && (
                      <PlaylistPanel playlist={currentPlaylist} authorName={currentPlaylist.authorName} videos={playlistVideos} currentVideoId={videoId} isShuffle={isShuffle} isLoop={isLoop} toggleShuffle={toggleShuffle} toggleLoop={toggleLoop} onReorder={handlePlaylistReorder} />
                 )}
@@ -308,7 +313,7 @@ const VideoPlayerPage: React.FC = () => {
                     <button className="px-3 py-1.5 bg-yt-light dark:bg-[#272727] text-black dark:text-white text-xs md:text-sm font-semibold rounded-lg whitespace-nowrap hover:bg-gray-200 dark:hover:bg-gray-700">最近アップロードされた動画</button>
                 </div>
 
-                {videoDetails.relatedVideos.map(video => (
+                {relatedVideos.map(video => (
                     <RelatedVideoCard key={video.id} video={video} />
                 ))}
 

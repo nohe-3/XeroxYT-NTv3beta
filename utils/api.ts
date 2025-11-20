@@ -74,7 +74,7 @@ export async function getPlayerConfig(): Promise<string> {
 }
 
 // --- DATA MAPPING HELPERS ---
-const mapYoutubeiVideoToVideo = (item: any): Video | null => {
+export const mapYoutubeiVideoToVideo = (item: any): Video | null => {
     if (!item?.id) return null;
     
     let views = '視聴回数不明';
@@ -188,6 +188,24 @@ export async function searchVideos(query: string, pageToken = '1', channelId?: s
         filteredVideos = videos.filter(v => v.channelId === channelId);
     }
     return { videos: filteredVideos, shorts, channels, playlists, nextPageToken: data.nextPageToken };
+}
+
+export async function getExternalRelatedVideos(videoId: string): Promise<Video[]> {
+    try {
+        const response = await fetch(`https://siawaseok.duckdns.org/api/video2/${videoId}`);
+        if (!response.ok) return [];
+        
+        const data = await response.json();
+        const items = Array.isArray(data) ? data : (data.items || data.related_videos || []);
+        
+        return items.map((item: any) => {
+            if (item.id && item.thumbnailUrl && item.channelName) return item as Video;
+            return mapYoutubeiVideoToVideo(item);
+        }).filter((v: any): v is Video => v !== null);
+    } catch (e) {
+        console.error("Failed to fetch external related videos", e);
+        return [];
+    }
 }
 
 export async function getVideoDetails(videoId: string): Promise<VideoDetails> {
