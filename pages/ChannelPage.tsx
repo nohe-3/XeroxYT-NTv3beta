@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getChannelDetails, getChannelVideos, getChannelHome, mapHomeVideoToVideo, getPlayerConfig } from '../utils/api';
 import type { ChannelDetails, Video, Channel, ChannelHomeData, HomePlaylist } from '../types';
@@ -8,22 +8,9 @@ import VideoCard from '../components/VideoCard';
 import VideoCardSkeleton from '../components/icons/VideoCardSkeleton';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import HorizontalScrollContainer from '../components/HorizontalScrollContainer';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 
 type Tab = 'home' | 'videos';
-
-const useInfiniteScroll = (callback: () => void, hasMore: boolean) => {
-    const observer = useRef<IntersectionObserver | null>(null);
-    const lastElementRef = useCallback((node: HTMLDivElement | null) => {
-        if (observer.current) observer.current.disconnect();
-        observer.current = new IntersectionObserver(entries => {
-            if (entries[0].isIntersecting && hasMore) {
-                callback();
-            }
-        });
-        if (node) observer.current.observe(node);
-    }, [callback, hasMore]);
-    return lastElementRef;
-};
 
 const ChannelPage: React.FC = () => {
     const { channelId } = useParams<{ channelId: string }>();
@@ -127,7 +114,8 @@ const ChannelPage: React.FC = () => {
         }
     }, [activeTab, videosPageToken, isFetchingMore, fetchTabData]);
 
-    const lastElementRef = useInfiniteScroll(handleLoadMore, !!videosPageToken);
+    // Use shared hook
+    const lastElementRef = useInfiniteScroll(handleLoadMore, !!videosPageToken, isFetchingMore || isLoading);
 
     if (isLoading) return <div className="text-center p-8">チャンネル情報を読み込み中...</div>;
     if (error && !channelDetails) return <div className="text-center text-red-500 bg-red-100 dark:bg-red-900/50 p-4 rounded-lg">{error}</div>;

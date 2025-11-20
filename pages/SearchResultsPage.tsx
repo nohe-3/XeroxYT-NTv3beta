@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { searchVideos } from '../utils/api';
@@ -6,6 +7,7 @@ import SearchVideoResultCard from '../components/SearchVideoResultCard';
 import SearchChannelResultCard from '../components/SearchChannelResultCard';
 import SearchPlaylistResultCard from '../components/SearchPlaylistResultCard';
 import ShortsShelf from '../components/ShortsShelf';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 
 const SearchResultsPage: React.FC = () => {
     const [searchParams] = useSearchParams();
@@ -74,6 +76,8 @@ const SearchResultsPage: React.FC = () => {
         }
     };
 
+    const lastElementRef = useInfiniteScroll(handleLoadMore, !!nextPageToken, isFetchingMore || isLoading);
+
     if (isLoading) {
         return (
              <div className="flex flex-col space-y-6 max-w-6xl mx-auto p-4">
@@ -139,16 +143,10 @@ const SearchResultsPage: React.FC = () => {
                 ))}
             </div>
 
-            {/* Load More Button */}
+            {/* Infinite Scroll Sentinel */}
             {nextPageToken && (
-                <div className="flex justify-center mt-8 mb-10">
-                    <button 
-                        onClick={handleLoadMore} 
-                        disabled={isFetchingMore}
-                        className="px-8 py-2 bg-yt-light dark:bg-yt-dark-gray rounded-full hover:bg-yt-spec-light-20 dark:hover:bg-yt-spec-20 font-medium transition-colors disabled:opacity-50"
-                    >
-                        {isFetchingMore ? '読み込み中...' : 'もっと見る'}
-                    </button>
+                <div ref={lastElementRef} className="flex justify-center mt-8 mb-10 h-10">
+                    {isFetchingMore && <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yt-blue"></div>}
                 </div>
             )}
         </div>

@@ -8,6 +8,7 @@ import { PlaylistProvider } from './contexts/PlaylistContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { SearchHistoryProvider } from './contexts/SearchHistoryContext';
 import { HistoryProvider } from './contexts/HistoryContext';
+import { PreferenceProvider } from './contexts/PreferenceContext';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -23,7 +24,9 @@ root.render(
           <NotificationProvider>
             <SearchHistoryProvider>
               <HistoryProvider>
-                <App />
+                <PreferenceProvider>
+                  <App />
+                </PreferenceProvider>
               </HistoryProvider>
             </SearchHistoryProvider>
           </NotificationProvider>
