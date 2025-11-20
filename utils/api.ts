@@ -85,7 +85,8 @@ const mapYoutubeiVideoToVideo = (item: any): Video | null => {
         channelName: item.author?.name ?? item.channel?.name ?? '不明なチャンネル',
         channelId: item.author?.id ?? item.channel?.id ?? '',
         channelAvatarUrl: item.author?.thumbnails?.[0]?.url ?? item.channel?.thumbnails?.[0]?.url ?? '',
-        // view_countがある場合は整形し、ない場合はshort_view_count（整形済みテキスト）を使用する
+        // view_countがある場合は整形し、ない場合はshort_view_countを使用する。
+        // EndScreenVideoの場合、short_view_count.textが "749万 回視聴" のように提供される。
         views: item.view_count?.text 
             ? `${formatJapaneseNumber(item.view_count.text)}回視聴` 
             : (item.short_view_count?.text ?? '視聴回数不明'),
