@@ -47,9 +47,14 @@ const HomePage: React.FC = () => {
             newVideos = [...analyzedVideos];
 
             // フォールバック: 急上昇動画 (ページ1のみ、または結果が少ない場合)
+            // エラーが出ても無視して、可能な限り分析結果を表示する
             if (newVideos.length < 10 && isInitial) {
-                const { videos: trendingVideos } = await getRecommendedVideos();
-                newVideos = [...newVideos, ...trendingVideos];
+                try {
+                    const { videos: trendingVideos } = await getRecommendedVideos();
+                    newVideos = [...newVideos, ...trendingVideos];
+                } catch (trendingError) {
+                    console.warn("Failed to load trending videos", trendingError);
+                }
             }
             
             // IDでの重複排除（既存の動画とも比較）
@@ -90,8 +95,19 @@ const HomePage: React.FC = () => {
 
     const lastElementRef = useInfiniteScroll(loadMore, true, isFetchingMore || isLoading);
 
-    if (error) {
-        return <div className="text-center text-red-500 bg-red-100 dark:bg-red-900/50 p-4 rounded-lg">{error}</div>;
+    // データがない場合（エラー時含む）は、ユーザーガイドを表示する
+    if (recommendedVideos.length === 0 && !isLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4 animate-fade-in">
+                <div className="mb-6 text-6xl">📺</div>
+                <h2 className="text-2xl font-bold mb-3 text-black dark:text-white">動画を視聴して、おすすめをカスタマイズ</h2>
+                <p className="text-yt-light-gray text-base max-w-lg mb-8 leading-relaxed">
+                    まだおすすめできる動画がありません。<br />
+                    検索バーから興味のある動画を探して視聴したり、チャンネル登録をすると、<br />
+                    ここにパーソナライズされた動画が表示されます。
+                </p>
+            </div>
+        );
     }
 
     return (
@@ -99,9 +115,11 @@ const HomePage: React.FC = () => {
             <VideoGrid videos={recommendedVideos} isLoading={isLoading} />
             
             {/* Infinite Scroll Sentinel */}
-            {!isLoading && <div ref={lastElementRef} className="h-20 flex justify-center items-center">
-                {isFetchingMore && <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yt-blue"></div>}
-            </div>}
+            {!isLoading && recommendedVideos.length > 0 && (
+                <div ref={lastElementRef} className="h-20 flex justify-center items-center">
+                    {isFetchingMore && <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yt-blue"></div>}
+                </div>
+            )}
         </div>
     );
 };
