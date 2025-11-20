@@ -19,66 +19,81 @@ app.get('/api/video', async (req, res) => {
 
     const info = await youtube.getInfo(id);
 
-    // ★★★ Next.jsの例を参考に、関連動画を深掘りして最大100件取得するロジックに修正 ★★★
-
-    // 関連動画取得（100件まで、深掘り）
-    let relatedVideos = [];
-    const MAX_VIDEOS = 100;
-
-    // 1. 初期の関連動画ソースを特定（複数のプロパティから優先順位に従って探す）
-    let initialRelated = info.related || [];
-    if (!initialRelated.length && Array.isArray(info.related_videos)) {
-      initialRelated = info.related_videos;
-    } else if (!initialRelated.length && Array.isArray(info.watch_next_feed)) {
-      initialRelated = info.watch_next_feed;
-    } else if (!initialRelated.length && Array.isArray(info.secondary_info?.watch_next_feed)) {
-      initialRelated = info.secondary_info.watch_next_feed;
-    }
+    // 関連動画を最大50件取得するロジック
+    // 複数のソースから候補を集約する
+    let allCandidates = [];
     
-    // 追加: player_overlays内のエンドスクリーンから関連動画を取得 (Login Required時などの対策)
-    // youtubei.jsのバージョンや変換によってプロパティ名が camelCase (playerOverlays) だったり snake_case (player_overlays) だったりするため両方チェック
-    if (!initialRelated.length) {
-        const overlays = info.player_overlays || info.playerOverlays;
-        if (overlays) {
-            const endScreen = overlays.end_screen || overlays.endScreen;
-            if (endScreen && Array.isArray(endScreen.results)) {
-                initialRelated = endScreen.results;
-            }
+    const addCandidates = (source) => {
+        if (Array.isArray(source)) {
+            allCandidates.push(...source);
+        }
+    };
+
+    // 優先度順ではなく、すべてを集める
+    addCandidates(info.watch_next_feed);
+    addCandidates(info.related_videos);
+    if (info.secondary_info) {
+        addCandidates(info.secondary_info.watch_next_feed);
+    }
+    addCandidates(info.related);
+
+    // プレーヤーオーバーレイ（エンドスクリーン）からも取得
+    const overlays = info.player_overlays || info.playerOverlays;
+    if (overlays) {
+        const endScreen = overlays.end_screen || overlays.endScreen;
+        if (endScreen && Array.isArray(endScreen.results)) {
+            addCandidates(endScreen.results);
         }
     }
-    
-    // 2. キューと処理済みIDセットの準備
-    const queue = [...initialRelated]; 
-    const seen = new Set();
-    
-    // 3. キューベースの深掘り処理
-    while (queue.length > 0 && relatedVideos.length < MAX_VIDEOS) {
-      const video = queue.shift();
-      
-      // 動画アイテムとしての最小限の検証（IDが11桁の文字列であること）と重複チェック
-      // エンドスクリーンのプレイリスト等は除外される
-      if (!video || typeof video.id !== 'string' || video.id.length !== 11 || seen.has(video.id)) {
-        continue;
-      }
-      seen.add(video.id);
 
-      // 元の動画オブジェクトを追加
-      relatedVideos.push(video);
+    // 重複排除とフィルタリング
+    const relatedVideos = [];
+    const seenIds = new Set();
+    const MAX_VIDEOS = 50;
 
-      // youtubei.js でさらに関連動画が提供されていれば、それをキューに追加して深掘り
-      if (Array.isArray(video.related) && video.related.length > 0) {
-        queue.push(...video.related);
-      }
+    for (const video of allCandidates) {
+        if (relatedVideos.length >= MAX_VIDEOS) break;
+        
+        // 動画オブジェクトの検証
+        if (!video) continue;
+        const videoId = video.id || video.videoId;
+        
+        // IDが文字列かつ11桁（通常の動画）で、未登録の場合のみ追加
+        if (typeof videoId === 'string' && videoId.length === 11 && !seenIds.has(videoId)) {
+            seenIds.add(videoId);
+            relatedVideos.push(video);
+        }
     }
 
-    // 4. `info`オブジェクトの関連動画部分を、深掘りして集めたリストで置き換える
-    //    元のコードの慣習に従い、watch_next_feed に格納します。
-    info.watch_next_feed = relatedVideos.slice(0, MAX_VIDEOS);
+    // もし数が足りなければ、Continuationを試みる（ライブラリがサポートしている場合）
+    if (relatedVideos.length < 20) {
+        try {
+            if (typeof info.getWatchNextContinuation === 'function') {
+                const nextInfo = await info.getWatchNextContinuation();
+                if (nextInfo && Array.isArray(nextInfo.watch_next_feed)) {
+                    for (const video of nextInfo.watch_next_feed) {
+                        if (relatedVideos.length >= MAX_VIDEOS) break;
+                        const videoId = video.id || video.videoId;
+                        if (typeof videoId === 'string' && videoId.length === 11 && !seenIds.has(videoId)) {
+                            seenIds.add(videoId);
+                            relatedVideos.push(video);
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            // Continuationの取得失敗は無視して、ある分だけ返す
+            console.log('Failed to fetch continuation:', e.message);
+        }
+    }
+
+    // 結果を watch_next_feed に格納して返す
+    info.watch_next_feed = relatedVideos;
     
-    // (念のため、他の可能性のあったプロパティをクリアし、データの重複を防ぎます)
-    if (info.related_videos) info.related_videos = [];
-    if (info.secondary_info?.watch_next_feed) info.secondary_info.watch_next_feed = [];
-    if (info.related) info.related = []; // info.related もクリアしておくと安全
+    // 他のプロパティをクリアして、フロントエンドが watch_next_feed を確実に使うようにする
+    if (info.secondary_info) info.secondary_info.watch_next_feed = [];
+    info.related_videos = [];
+    info.related = [];
 
     res.status(200).json(info);
     
