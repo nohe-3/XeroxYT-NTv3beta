@@ -208,9 +208,7 @@ app.get('/api/channel', async (req, res) => {
 
     const targetPage = parseInt(page);
     
-    // ページネーションロジック修正: 
-    // 指定されたページの動画「のみ」を取得して返すように変更
-    // 以前は全ページの動画を累積して返していたため、重複が発生していた
+    // ページネーションロジック修正
     if (targetPage > 1) {
         for (let i = 1; i < targetPage; i++) {
             if (videosFeed.has_continuation) {
@@ -232,7 +230,6 @@ app.get('/api/channel', async (req, res) => {
         avatar = avatar.url;
     }
 
-    // バナー抽出ロジックの強化
     let banner = channel.metadata?.banner || channel.header?.banner || null;
     if (Array.isArray(banner) && banner.length > 0) {
         banner = banner[0].url;
@@ -271,7 +268,6 @@ app.get('/api/channel-home-proxy', async (req, res) => {
     const { id } = req.query;
     if (!id) return res.status(400).json({ error: "Missing channel id" });
 
-    // 外部APIからデータを取得
     const response = await fetch(`https://siawaseok.duckdns.org/api/channel/${id}`);
     if (!response.ok) {
         return res.status(response.status).json({ error: "Failed to fetch from external API" });
@@ -376,15 +372,19 @@ app.get('/api/fvideo', async (req, res) => {
     const home = await youtube.getHomeFeed();
     let allVideos = home.videos ? [...home.videos] : [];
     
-    // 1回だけ続きを取得して、より多くの動画を返す
-    if (home.has_continuation) {
+    // 続きの動画を積極的に取得してボリュームを確保 (3回程度)
+    let attempts = 0;
+    let currentFeed = home;
+    while (currentFeed.has_continuation && attempts < 3) {
         try {
-            const continuation = await home.getContinuation();
-            if (continuation.videos) {
-                allVideos.push(...continuation.videos);
+            currentFeed = await currentFeed.getContinuation();
+            if (currentFeed.videos) {
+                allVideos.push(...currentFeed.videos);
             }
+            attempts++;
         } catch (e) {
             console.warn('[API] Home feed continuation failed:', e.message);
+            break;
         }
     }
     

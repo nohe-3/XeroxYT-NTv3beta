@@ -36,6 +36,7 @@ export const getXraiRecommendations = async (sources: RecommendationSource): Pro
         subscribedChannels, 
     } = sources;
 
+    // 1. Build User Interest Profile
     const userProfile = buildUserProfile({
         watchHistory,
         searchHistory,
@@ -44,68 +45,95 @@ export const getXraiRecommendations = async (sources: RecommendationSource): Pro
     
     const candidatePromises: Promise<Video[]>[] = [];
 
-    // Source A: Deep Related Video Walk (High Priority)
-    if (watchHistory.length > 0) {
-        const recentVideos = shuffleArray(watchHistory.slice(0, 5)).slice(0, 3);
-        recentVideos.forEach(video => {
-            candidatePromises.push(
-                getVideoDetails(video.id)
-                    .then(details => (details.relatedVideos || []).slice(0, 15))
-                    .catch(() => [])
-            );
-        });
-    }
+    // 2. Parallel Data Fetching for Speed
 
-    // Source B: Interest-based Search
-    const topKeywords = [...userProfile.keywords.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(entry => entry[0]);
-    
-    topKeywords.forEach(keyword => {
+    // Source A: Contextual Walk (Related to recent history)
+    // Only fetch related for the very last video to save bandwidth/time
+    if (watchHistory.length > 0) {
+        const lastVideo = watchHistory[0]; // Most recent
         candidatePromises.push(
-            searchVideos(keyword, '1')
-                .then(res => res.videos.slice(0, 10))
+            getVideoDetails(lastVideo.id)
+                .then(details => (details.relatedVideos || []).slice(0, 20))
                 .catch(() => [])
         );
-    });
+    }
 
-    // Source C: Subscribed Channel's Recent Videos
+    // Source B: Interest-based Search (The core of discovery)
+    // Extract top weighted keywords and search for them
+    const topKeywords = [...userProfile.keywords.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 2) // Top 2 keywords
+        .map(entry => entry[0]);
+    
+    if (topKeywords.length > 0) {
+        // Search combined keywords for specificity
+        const query = topKeywords.join(' ');
+        candidatePromises.push(
+            searchVideos(query, '1')
+                .then(res => res.videos)
+                .catch(() => [])
+        );
+        // Also search the top keyword individually if we have enough
+        if (topKeywords.length > 1) {
+             candidatePromises.push(
+                searchVideos(topKeywords[0], '1')
+                    .then(res => res.videos)
+                    .catch(() => [])
+            );
+        }
+    } else {
+        // If no profile, search for generic popular topics
+        candidatePromises.push(
+            searchVideos("trending", '1').then(res => res.videos).catch(()=>[])
+        );
+    }
+
+    // Source C: Subscriptions (Recent uploads)
     if (subscribedChannels.length > 0) {
-        const randomSubs = shuffleArray(subscribedChannels).slice(0, 5);
+        // Pick 3 random subscribed channels to check for new content
+        const randomSubs = shuffleArray(subscribedChannels).slice(0, 3);
         randomSubs.forEach(sub => {
             candidatePromises.push(
                 getChannelVideos(sub.id)
-                    .then(res => res.videos.slice(0, 5))
+                    .then(res => res.videos.slice(0, 5)) // Only latest 5
                     .catch(() => [])
             );
         });
     }
 
-    // Source D: Fallback (General recommendations)
-    if (candidatePromises.length < 3) {
-         candidatePromises.push(
-            getRecommendedVideos()
-                .then(res => res.videos.slice(0, 20))
-                .catch(() => [])
-        );
-    }
+    // Source D: Fallback / Trend Filler
+    // Use standard trending/home feed to ensure we always have content
+    candidatePromises.push(
+        getRecommendedVideos()
+            .then(res => res.videos)
+            .catch(() => [])
+    );
 
+    // 3. Aggregate & Deduplicate
     const results = await Promise.allSettled(candidatePromises);
     let allCandidates: Video[] = [];
+    const seenCandidateIds = new Set<string>();
+
     results.forEach(result => {
         if (result.status === 'fulfilled' && Array.isArray(result.value)) {
-            allCandidates.push(...result.value);
+            result.value.forEach(v => {
+                if (!seenCandidateIds.has(v.id)) {
+                    seenCandidateIds.add(v.id);
+                    allCandidates.push(v);
+                }
+            });
         }
     });
 
+    // 4. Scoring & Ranking (The AI Part)
     const rankedVideos = rankVideos(allCandidates, userProfile, {
         ngKeywords: sources.ngKeywords,
         ngChannels: sources.ngChannels,
         watchHistory: sources.watchHistory,
     });
     
-    return rankedVideos.slice(0, 50);
+    // Return top results
+    return rankedVideos;
 };
 
 
@@ -113,7 +141,7 @@ export const getXraiRecommendations = async (sources: RecommendationSource): Pro
 
 /**
  * 従来のシンプルなYouTube風の推薦を生成する。
- * youtubei.jsが提供するデフォルトのホームフィードを使用する。
+ * APIが返すデフォルトのホームフィードを使用する。
  */
 export const getLegacyRecommendations = async (): Promise<Video[]> => {
     try {

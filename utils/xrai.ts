@@ -19,33 +19,46 @@ interface ScoringContext {
   watchHistory: Video[];
 }
 
-// --- Keyword Extraction (Simple Version) ---
+// --- Keyword Extraction (Improved Version) ---
 
 const JAPANESE_STOP_WORDS = new Set([
   'の', 'に', 'は', 'を', 'が', 'で', 'です', 'ます', 'こと', 'もの', 'これ', 'それ', 'あれ',
-  'いる', 'する', 'ある', 'ない', 'から', 'まで', 'と', 'も', 'や', 'など', 'さん', 'ちゃん'
+  'いる', 'する', 'ある', 'ない', 'から', 'まで', 'と', 'も', 'や', 'など', 'さん', 'ちゃん',
+  'about', 'and', 'the', 'to', 'a', 'of', 'in', 'for', 'on', 'with', 'as', 'at'
 ]);
-const ENGLISH_STOP_WORDS = new Set([
-  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'in', 'on', 'at', 'to', 'for', 'of',
-  'it', 'you', 'he', 'she', 'they', 'we', 'i', 'and', 'or', 'but', 'by', 'with'
-]);
+
+// Intl.Segmenter available in modern browsers (Chrome 87+, Safari 14.1+, Firefox 125+)
+// Fallback to simple splitting if not available.
+const segmenter = (typeof Intl !== 'undefined' && (Intl as any).Segmenter) 
+    ? new (Intl as any).Segmenter('ja', { granularity: 'word' }) 
+    : null;
 
 const extractKeywords = (text: string): string[] => {
   if (!text) return [];
-  const cleanedText = text
-    .toLowerCase()
-    .replace(/[\p{S}\p{P}\p{Z}\p{C}]/gu, ' ') 
-    .replace(/[\[\]\(\)【】『』「」・、。!?#]/g, ' ');
+  const cleanedText = text.toLowerCase();
+  
+  let words: string[] = [];
 
-  const words = cleanedText.split(/\s+/).filter(word => word.length > 1);
+  if (segmenter) {
+      // Use Intl.Segmenter for proper Japanese tokenization
+      const segments = segmenter.segment(cleanedText);
+      for (const segment of segments) {
+          if (segment.isWordLike) {
+              words.push(segment.segment);
+          }
+      }
+  } else {
+      // Fallback: Simple split by whitespace and punctuation
+      words = cleanedText
+        .replace(/[\p{S}\p{P}\p{Z}\p{C}]/gu, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 0);
+  }
 
   const keywords = words.filter(word => {
-    if (JAPANESE_STOP_WORDS.has(word) || ENGLISH_STOP_WORDS.has(word)) {
-      return false;
-    }
-    if (/^\d+$/.test(word)) {
-      return false;
-    }
+    if (word.length <= 1 && !/^[a-zA-Z0-9]$/.test(word)) return false; // Ignore single chars mostly
+    if (JAPANESE_STOP_WORDS.has(word)) return false;
+    if (/^\d+$/.test(word)) return false; // Ignore pure numbers
     return true;
   });
 
@@ -63,20 +76,26 @@ export const buildUserProfile = (sources: UserSources): UserProfile => {
     });
   };
 
-  sources.searchHistory.forEach((term, index) => {
-    const weight = 3.0 * Math.exp(-index / 5); // 最近の検索ほど指数関数的に高い評価
+  // 1. Search History: High intent, strong weight
+  // Decay: Newer searches are much more relevant
+  sources.searchHistory.slice(0, 20).forEach((term, index) => {
+    const weight = 5.0 * Math.exp(-index / 5); 
     addKeywords(term, weight);
   });
 
-  sources.watchHistory.forEach((video, index) => {
-    const weight = 2.0 * Math.exp(-index / 10); // 最近の視聴ほど高い評価
+  // 2. Watch History: Implicit interest
+  // Decay: Recent watches define current session context
+  sources.watchHistory.slice(0, 50).forEach((video, index) => {
+    const weight = 3.0 * Math.exp(-index / 10);
     addKeywords(video.title, weight);
-    addKeywords(video.channelName, weight * 0.8);
-    addKeywords(video.descriptionSnippet || '', weight * 0.5);
+    addKeywords(video.channelName, weight * 1.2); // Channel affinity
+    // Description is noisy, lower weight
+    // addKeywords(video.descriptionSnippet || '', weight * 0.2); 
   });
 
+  // 3. Subscriptions: Long-term interest
   sources.subscribedChannels.forEach(channel => {
-    addKeywords(channel.name, 1.5);
+    addKeywords(channel.name, 2.0);
   });
   
   return { keywords };
@@ -90,13 +109,31 @@ const parseUploadedAt = (uploadedAt: string): number => {
     const numMatch = text.match(/(\d+)/);
     const num = numMatch ? parseInt(numMatch[1], 10) : 0;
 
-    if (text.includes('分前') || text.includes('時間前')) return 0;
-    if (text.includes('日前')) return num;
-    if (text.includes('週間前')) return num * 7;
-    if (text.includes('か月前')) return num * 30;
-    if (text.includes('年前')) return num * 365;
-    return 999; // パース不能 or 古い
+    if (text.includes('分前') || text.includes('minutes ago')) return 0;
+    if (text.includes('時間前') || text.includes('hours ago')) return 0;
+    if (text.includes('日前') || text.includes('days ago')) return num;
+    if (text.includes('週間前') || text.includes('weeks ago')) return num * 7;
+    if (text.includes('か月前') || text.includes('months ago')) return num * 30;
+    if (text.includes('年前') || text.includes('years ago')) return num * 365;
+    return 999; 
 };
+
+const parseViews = (viewsStr: string): number => {
+    if (!viewsStr) return 0;
+    // Remove non-numeric except dots/k/m for simple parsing if needed, 
+    // but our API returns formatted strings like "1.2万回" or "100K"
+    // Let's try to extract numbers.
+    let mult = 1;
+    if (viewsStr.includes('万')) mult = 10000;
+    else if (viewsStr.includes('億')) mult = 100000000;
+    else if (viewsStr.toUpperCase().includes('K')) mult = 1000;
+    else if (viewsStr.toUpperCase().includes('M')) mult = 1000000;
+    else if (viewsStr.toUpperCase().includes('B')) mult = 1000000000;
+
+    const numMatch = viewsStr.match(/(\d+(\.\d+)?)/);
+    if (!numMatch) return 0;
+    return parseFloat(numMatch[1]) * mult;
+}
 
 export const rankVideos = (
   videos: Video[],
@@ -107,14 +144,20 @@ export const rankVideos = (
   const seenIds = new Set<string>(context.watchHistory.map(v => v.id));
 
   for (const video of videos) {
-    if (!video || !video.id || seenIds.has(video.id)) continue;
+    if (!video || !video.id) continue;
     
+    // Negative Filtering
     const fullText = `${video.title} ${video.channelName} ${video.descriptionSnippet || ''}`.toLowerCase();
-
     if (context.ngKeywords.some(ng => fullText.includes(ng.toLowerCase()))) continue;
     if (context.ngChannels.includes(video.channelId)) continue;
     
-    // 1. 関連度スコア (Relevance)
+    // Penalty for already watched videos (diminishing return)
+    let historyPenalty = 1.0;
+    if (seenIds.has(video.id)) {
+        historyPenalty = 0.1; // Significantly reduce score but don't hide completely if relevant
+    }
+
+    // 1. Relevance Score (Keyword Match)
     let relevanceScore = 0;
     const videoKeywords = new Set(extractKeywords(fullText));
     videoKeywords.forEach(kw => {
@@ -123,27 +166,36 @@ export const rankVideos = (
       }
     });
 
-    // 2. 人気度スコア (Popularity)
-    const views = parseInt(video.views.replace(/[^0-9]/g, ''), 10);
-    const popularityScore = !isNaN(views) ? Math.log10(views + 1) : 0;
+    // 2. Popularity Score (Log scale)
+    const views = parseViews(video.views);
+    const popularityScore = Math.log10(views + 1); // 10k views -> 4, 1m -> 6
 
-    // 3. 鮮度スコア (Freshness)
+    // 3. Freshness Score
     const daysAgo = parseUploadedAt(video.uploadedAt);
-    const freshnessScore = Math.max(0, 1.0 - (daysAgo / 60)) * 5; // 直近2ヶ月以内の動画にボーナス
+    // Bonus for very new videos (under 3 days), smooth decay after
+    let freshnessScore = 0;
+    if (daysAgo <= 3) freshnessScore = 5;
+    else freshnessScore = Math.max(0, 4 - Math.log2(daysAgo)); 
 
-    // 4. 最終スコア計算 (重み付け)
-    const finalScore = (relevanceScore * 1.5) + (popularityScore * 0.3) + (freshnessScore * 1.0);
+    // 4. Diversity/Discovery Weights (Heuristic constants)
+    // Relevance is king, but freshness and popularity validate quality.
+    const finalScore = (
+        (relevanceScore * 2.0) + 
+        (popularityScore * 0.5) + 
+        (freshnessScore * 1.2)
+    ) * historyPenalty;
     
     scoredVideos.push({ video, score: finalScore });
-    seenIds.add(video.id);
   }
 
+  // Sort by score descending
   scoredVideos.sort((a, b) => b.score - a.score);
 
-  // 5. 多様性の確保 (Diversity)
+  // 5. Diversity Filter (Post-Ranking)
+  // Prevent one channel from dominating the feed
   const finalRankedList: Video[] = [];
   const channelCount = new Map<string, number>();
-  const MAX_FROM_SAME_CHANNEL = 3;
+  const MAX_FROM_SAME_CHANNEL = 2; // Strict limit for homepage variety
 
   for (const { video } of scoredVideos) {
     const count = channelCount.get(video.channelId) || 0;

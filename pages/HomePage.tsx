@@ -75,10 +75,13 @@ const HomePage: React.FC = () => {
                     preferredGenres, preferredChannels, ngKeywords, ngChannels,
                     page: pageNum
                 });
-                setHasNextPage(rawVideos.length > 0); // XRAI can potentially generate infinitely
+                // XRAI is dynamic, so we can always pretend there's more by re-running with slight randomization
+                setHasNextPage(true); 
             } else {
-                // Use the legacy engine (one-shot, no pagination)
+                // Use the legacy engine
                 if (pageNum > 1) {
+                    // Legacy API (fvideo) doesn't support pagination in this implementation easily without token tracking state
+                    // For now, legacy is single page to avoid complexity, or we could refactor api/fvideo
                     setIsFetchingMore(false);
                     setHasNextPage(false);
                     return;
@@ -155,6 +158,7 @@ const HomePage: React.FC = () => {
         }
     };
 
+    // 初期ユーザーかつ読み込み完了後
     if (isNewUser && feed.length === 0 && !isLoading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 animate-fade-in">
@@ -207,28 +211,10 @@ const HomePage: React.FC = () => {
                 </div>
             )}
 
-            {/* Show grid only when not in initial loading state */}
-            {!isLoading && <VideoGrid videos={feed} isLoading={false} />}
+            {/* Show grid. Pass isLoading to VideoGrid for Skeleton handling */}
+            <VideoGrid videos={feed} isLoading={isLoading && feed.length === 0} />
 
-            {/* Skeletons for initial loading */}
-            {isLoading && (
-                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-x-4 gap-y-8">
-                    {Array.from({ length: 20 }).map((_, index) => (
-                         <div key={index} className="flex flex-col animate-pulse">
-                            <div className="w-full aspect-video bg-yt-light dark:bg-yt-dark-gray rounded-xl mb-3"></div>
-                            <div className="flex gap-3">
-                                <div className="w-9 h-9 rounded-full bg-yt-light dark:bg-yt-dark-gray"></div>
-                                <div className="flex-1 space-y-2">
-                                    <div className="h-4 bg-yt-light dark:bg-yt-dark-gray rounded w-3/4"></div>
-                                    <div className="h-4 bg-yt-light dark:bg-yt-dark-gray rounded w-1/2"></div>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-            
-            {/* Skeletons for infinite scroll loading */}
+            {/* Skeletons for infinite scroll loading (appended at bottom) */}
             {isFetchingMore && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-x-4 gap-y-8 mt-8">
                     {Array.from({ length: 10 }).map((_, index) => (
@@ -245,7 +231,6 @@ const HomePage: React.FC = () => {
                     ))}
                 </div>
             )}
-
 
             {!isLoading && hasNextPage && feed.length > 0 && (
                 <div ref={lastElementRef} className="h-20 flex justify-center items-center" />
