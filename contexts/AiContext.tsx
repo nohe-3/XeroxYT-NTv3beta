@@ -7,19 +7,12 @@ import { buildUserProfile, inferTopInterests } from '../utils/xrai';
 // Use Phi-3.5-mini-instruct for high performance (12B equivalent reasoning) with low VRAM usage
 const SELECTED_MODEL = "Phi-3.5-mini-instruct-q4f16_1-MLC"; 
 
-export interface Message {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-}
-
 interface AiContextType {
   isLoaded: boolean;
   isLoading: boolean;
   loadProgress: string;
-  messages: Message[];
   initializeEngine: () => Promise<void>;
   getAiRecommendations: () => Promise<string[]>;
-  sendMessage: (text: string) => Promise<void>;
 }
 
 const AiContext = createContext<AiContextType | undefined>(undefined);
@@ -28,7 +21,6 @@ export const AiProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadProgress, setLoadProgress] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
   
   const engine = useRef<webllm.MLCEngine | null>(null);
   const { history } = useHistory();
@@ -61,7 +53,6 @@ export const AiProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
       engine.current = newEngine;
       setIsLoaded(true);
-      setMessages([{ role: 'assistant', content: 'こんにちは！動画探しのお手伝いをします。何でも聞いてください。' }]);
 
     } catch (error) {
       console.error("Failed to load WebLLM:", error);
@@ -83,25 +74,34 @@ export const AiProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
         searchHistory: [],
         subscribedChannels: subscribedChannels
     });
-    const interests = inferTopInterests(profile, 10);
+    const interests = inferTopInterests(profile, 15);
+    const recentTitles = history.slice(0, 5).map(v => v.title).join('", "');
     
+    // Prompt engineering for "YouTube-like" discovery (New Channels, Adjacent Genres)
     const prompt = `
-    Analyze the user's interests: ${interests.join(', ')} and recent history: ${history.slice(0,3).map(v => v.title).join(', ')}.
-    Based on this analysis, generate 5 unique, creative, and specific search queries for YouTube to help them discover NEW content.
-    Do not number the list. Just output 5 lines of search terms. Japanese or English.
+    You are a YouTube recommendation algorithm.
+    User's core interests: [${interests.join(', ')}].
+    Recently watched: ["${recentTitles}"].
+
+    Task: Generate 5 specific YouTube search queries to help the user discover NEW channels and RELATED genres they haven't seen yet.
+    Rules:
+    1. Focus on adjacent niches (e.g., if "Minecraft", suggest "Terraria" or "Indie Sandbox").
+    2. Suggest topics for "Deep Dives" or "Video Essays" related to their interests.
+    3. Do not use generic terms like "funny video". Be specific.
+    4. Output ONLY the 5 queries, one per line. No numbering.
     `;
 
     try {
         const reply = await engine.current.chat.completions.create({
             messages: [{ role: 'user', content: prompt }],
-            temperature: 0.8,
-            max_tokens: 100,
+            temperature: 0.7, // Slightly lower temperature for more focused results
+            max_tokens: 150,
         });
         
         const content = reply.choices[0].message.content || '';
         // Split by newlines and clean up
         const queries = content.split('\n')
-            .map(line => line.replace(/^\d+\.\s*/, '').replace(/^- \s*/, '').trim())
+            .map(line => line.replace(/^\d+\.\s*/, '').replace(/^- \s*/, '').replace(/"/g, '').trim())
             .filter(line => line.length > 0);
             
         return queries.slice(0, 5);
@@ -111,37 +111,8 @@ export const AiProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     }
   };
 
-  const sendMessage = async (text: string) => {
-      if (!engine.current || !text.trim()) return;
-
-      const newMessages: Message[] = [...messages, { role: 'user', content: text }];
-      setMessages(newMessages);
-
-      try {
-          const historyContext = history.slice(0, 10).map(v => v.title).join(', ');
-          const systemPrompt = `You are a helpful YouTube video assistant. The user has watched recently: ${historyContext}. Answer in Japanese if the user asks in Japanese. Be concise.`;
-          
-          const completionMessages = [
-              { role: 'system', content: systemPrompt },
-              ...newMessages.map(m => ({ role: m.role, content: m.content }))
-          ];
-
-          const reply = await engine.current.chat.completions.create({
-              messages: completionMessages as any,
-              temperature: 0.7,
-              max_tokens: 512,
-          });
-          
-          const responseContent = reply.choices[0].message.content || "";
-          setMessages(prev => [...prev, { role: 'assistant', content: responseContent }]);
-      } catch (e) {
-           console.error("Chat completion failed", e);
-           setMessages(prev => [...prev, { role: 'assistant', content: "エラーが発生しました。" }]);
-      }
-  };
-
   return (
-    <AiContext.Provider value={{ isLoaded, isLoading, loadProgress, messages, initializeEngine, getAiRecommendations, sendMessage }}>
+    <AiContext.Provider value={{ isLoaded, isLoading, loadProgress, initializeEngine, getAiRecommendations }}>
       {children}
     </AiContext.Provider>
   );

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import VideoGrid from '../components/VideoGrid';
 import ShortsShelf from '../components/ShortsShelf';
@@ -52,8 +51,15 @@ const HomePage: React.FC = () => {
     const { searchHistory } = useSearchHistory();
     const { history: watchHistory } = useHistory();
     const { preferredGenres, preferredChannels, ngKeywords, ngChannels, exportUserData, importUserData, useXrai } = usePreference();
-    const { getAiRecommendations } = useAi();
+    const { getAiRecommendations, initializeEngine, isLoaded, isLoading: isAiLoading } = useAi();
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Automatically initialize AI engine in background for standard recommendations
+    useEffect(() => {
+        if (!isLoaded && !isAiLoading) {
+            initializeEngine().catch(e => console.warn("Background AI init failed", e));
+        }
+    }, [isLoaded, isAiLoading, initializeEngine]);
 
     const isNewUser = useMemo(() => {
         const hasSubscriptions = subscribedChannels.length > 1;
@@ -64,7 +70,7 @@ const HomePage: React.FC = () => {
     }, [subscribedChannels, searchHistory, watchHistory, preferredGenres]);
 
     const loadRecommendations = useCallback(async (pageNum: number) => {
-        if (aiMode) return; // AI mode handled separately
+        if (aiMode) return;
 
         const isInitial = pageNum === 1;
         if (isInitial) {
@@ -74,10 +80,9 @@ const HomePage: React.FC = () => {
         }
         
         try {
+            // 1. Base Recommendations (Heuristic / XRAI)
             let rawVideos: Video[];
-
             if (useXrai) {
-                // Use the advanced XRAI v2 engine
                 rawVideos = await getXraiRecommendations({
                     searchHistory, watchHistory, subscribedChannels,
                     preferredGenres, preferredChannels, ngKeywords, ngChannels,
@@ -92,6 +97,43 @@ const HomePage: React.FC = () => {
                 }
                 rawVideos = await getLegacyRecommendations();
                 setHasNextPage(false);
+            }
+
+            // 2. AI Augmentation (WebLLM) - Discovery Injection
+            // If the engine is loaded, we fetch 1-2 semantic queries and mix them in.
+            // This runs in parallel to not slow down the main feed too much, or we await it if we want strong integration.
+            // For First Contentful Paint, we might skip this on page 1 if it's too slow, but since we want "AI included", we try.
+            if (isLoaded && !isNewUser) {
+                try {
+                    // Only fetch AI suggestions occasionally to save resources/API calls if needed
+                    if (pageNum === 1 || pageNum % 2 === 0) {
+                        const aiQueries = await getAiRecommendations();
+                        // Take top 1 query for this batch
+                        if (aiQueries.length > 0) {
+                            const query = aiQueries[Math.floor(Math.random() * aiQueries.length)];
+                            const searchRes = await searchVideos(query, '1');
+                            const aiVideos = searchRes.videos.slice(0, 5); // Take top 5 relevant videos
+                            
+                            // Interleave AI videos into rawVideos
+                            // Insert 1 AI video every 5 standard videos
+                            const mixed: Video[] = [];
+                            let aiIndex = 0;
+                            rawVideos.forEach((v, i) => {
+                                mixed.push(v);
+                                if ((i + 1) % 5 === 0 && aiIndex < aiVideos.length) {
+                                    mixed.push(aiVideos[aiIndex++]);
+                                }
+                            });
+                            // Add remaining AI videos if standard feed is short
+                            while (aiIndex < aiVideos.length) {
+                                mixed.push(aiVideos[aiIndex++]);
+                            }
+                            rawVideos = mixed;
+                        }
+                    }
+                } catch (e) {
+                    console.warn("AI augmentation failed", e);
+                }
             }
 
             const newVideos: Video[] = [];
@@ -128,7 +170,7 @@ const HomePage: React.FC = () => {
             setIsLoading(false);
             setIsFetchingMore(false);
         }
-    }, [subscribedChannels, searchHistory, watchHistory, preferredGenres, preferredChannels, ngKeywords, ngChannels, useXrai, aiMode]);
+    }, [subscribedChannels, searchHistory, watchHistory, preferredGenres, preferredChannels, ngKeywords, ngChannels, useXrai, aiMode, isLoaded, isNewUser, getAiRecommendations]);
 
     useEffect(() => {
         if (!aiMode) {
@@ -268,12 +310,13 @@ const HomePage: React.FC = () => {
 
             {error && <div className="text-red-500 text-center mb-4">{error}</div>}
             
+            {/* Added mt-4 and padding to prevent overlap with sticky header */}
             {aiMode && !isLoading && feed.length > 0 && (
-                <div className="mb-6 px-2">
+                <div className="mb-6 px-2 mt-4 pt-2">
                     <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-500 to-blue-500">
                         AIが選んだあなたへのおすすめ
                     </h2>
-                    <p className="text-sm text-yt-light-gray">ローカルLLMがあなたの興味に基づいて生成したプレイリストです</p>
+                    <p className="text-sm text-yt-light-gray mt-1">ローカルLLMがあなたの興味に基づいて生成したプレイリストです</p>
                 </div>
             )}
             
