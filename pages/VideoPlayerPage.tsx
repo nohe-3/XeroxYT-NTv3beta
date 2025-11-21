@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { getVideoDetails, getPlayerConfig, getComments, getVideosByIds, getExternalRelatedVideos } from '../utils/api';
-import type { VideoDetails, Video, Comment, Channel } from '../types';
+import type { VideoDetails, Video, Comment, Channel, StreamData } from '../types';
 import { useSubscription } from '../contexts/SubscriptionContext';
 import { useHistory } from '../contexts/HistoryContext';
 import { usePlaylist } from '../contexts/PlaylistContext';
@@ -11,7 +11,10 @@ import PlaylistModal from '../components/PlaylistModal';
 import CommentComponent from '../components/Comment';
 import PlaylistPanel from '../components/PlaylistPanel';
 import RelatedVideoCard from '../components/RelatedVideoCard';
-import { LikeIcon, SaveIcon, MoreIconHorizontal, ShareIcon, DownloadIcon, ThanksIcon, DislikeIcon, ChevronRightIcon, CheckIcon } from '../components/icons/Icons';
+import StreamingPlayer from '../components/StreamingPlayer';
+import { LikeIcon, SaveIcon, MoreIconHorizontal, ShareIcon, DownloadIcon, ThanksIcon, DislikeIcon, ChevronRightIcon, CheckIcon, PlayIcon, CloseIcon } from '../components/icons/Icons';
+
+type PlayerMode = 'embed' | 'stream';
 
 const VideoPlayerPage: React.FC = () => {
     const { videoId } = useParams<{ videoId: string }>();
@@ -29,6 +32,12 @@ const VideoPlayerPage: React.FC = () => {
     const [playlistVideos, setPlaylistVideos] = useState<Video[]>([]);
     const [isCollaboratorMenuOpen, setIsCollaboratorMenuOpen] = useState(false);
     const collaboratorMenuRef = useRef<HTMLDivElement>(null);
+    
+    // Streaming & Download State
+    const [playerMode, setPlayerMode] = useState<PlayerMode>('embed');
+    const [streamData, setStreamData] = useState<StreamData | null>(null);
+    const [isStreamLoading, setIsStreamLoading] = useState(false);
+    const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
     
     const [isShuffle, setIsShuffle] = useState(searchParams.get('shuffle') === '1');
     const [isLoop, setIsLoop] = useState(searchParams.get('loop') === '1');
@@ -96,6 +105,8 @@ const VideoPlayerPage: React.FC = () => {
                 setVideoDetails(null);
                 setComments([]);
                 setRelatedVideos([]);
+                setStreamData(null);
+                setPlayerMode('embed'); // Reset mode on new video
                 window.scrollTo(0, 0);
             }
 
@@ -149,6 +160,37 @@ const VideoPlayerPage: React.FC = () => {
             isMounted = false;
         };
     }, [videoId, addVideoToHistory]);
+
+    // Stream Data Fetcher
+    const fetchStreamData = async () => {
+        if (!videoId || streamData || isStreamLoading) return;
+        
+        setIsStreamLoading(true);
+        try {
+            const res = await fetch(`/api/stream?videoId=${videoId}`);
+            if (!res.ok) throw new Error('ストリーム情報の取得に失敗しました');
+            const data = await res.json();
+            setStreamData(data);
+        } catch (err) {
+            console.error(err);
+            alert('ストリーミングリンクの取得に失敗しました。埋め込みプレーヤーを使用してください。');
+            setPlayerMode('embed');
+        } finally {
+            setIsStreamLoading(false);
+        }
+    };
+
+    const handleModeChange = (mode: PlayerMode) => {
+        setPlayerMode(mode);
+        if (mode === 'stream') {
+            fetchStreamData();
+        }
+    };
+
+    const handleDownloadClick = () => {
+        setIsDownloadModalOpen(true);
+        fetchStreamData();
+    };
     
     const shuffledPlaylistVideos = useMemo(() => {
         if (!isShuffle || playlistVideos.length === 0) return playlistVideos;
@@ -222,7 +264,6 @@ const VideoPlayerPage: React.FC = () => {
         return null;
     }
     
-    // メインチャンネル（コラボレーターがいる場合はリストの最初、いなければ単一チャンネル）
     const mainChannel = videoDetails.collaborators && videoDetails.collaborators.length > 0 
         ? videoDetails.collaborators[0] 
         : videoDetails.channel;
@@ -242,7 +283,6 @@ const VideoPlayerPage: React.FC = () => {
       channelAvatarUrl: mainChannel.avatarUrl,
     };
 
-    // コラボレーター表示用のロジック
     const hasCollaborators = videoDetails.collaborators && videoDetails.collaborators.length > 1;
     const collaboratorsList = videoDetails.collaborators || [];
 
@@ -250,14 +290,57 @@ const VideoPlayerPage: React.FC = () => {
         <div className="flex flex-col lg:flex-row gap-6 max-w-[1750px] mx-auto pt-2 md:pt-6 px-4 md:px-6 justify-center">
             {/* Main Content Column */}
             <div className="flex-1 min-w-0 max-w-full">
-                {/* Video Player */}
+                {/* Video Player Area */}
                 <div className="w-full aspect-video bg-yt-black rounded-xl overflow-hidden shadow-lg relative z-10">
-                    <iframe src={iframeSrc} key={iframeSrc} title={videoDetails.title} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen className="w-full h-full"></iframe>
+                    {playerMode === 'embed' ? (
+                        <iframe src={iframeSrc} key={iframeSrc} title={videoDetails.title} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen className="w-full h-full"></iframe>
+                    ) : (
+                        isStreamLoading ? (
+                            <div className="w-full h-full flex items-center justify-center flex-col gap-4 text-white">
+                                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
+                                <p>ストリームを準備中...</p>
+                            </div>
+                        ) : streamData?.streamingUrl ? (
+                            <StreamingPlayer videoUrl={streamData.streamingUrl} />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-white">
+                                <p>ストリーミングリンクが見つかりませんでした。</p>
+                            </div>
+                        )
+                    )}
                 </div>
 
                 <div className="">
-                    {/* Title */}
-                    <h1 className="text-lg md:text-xl font-bold mt-3 mb-2 text-black dark:text-white break-words">{videoDetails.title}</h1>
+                    {/* Title & Player Toggle */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-3 mb-2">
+                         <h1 className="text-lg md:text-xl font-bold text-black dark:text-white break-words flex-1">
+                            {videoDetails.title}
+                        </h1>
+                        
+                        {/* Mode Toggle */}
+                        <div className="flex items-center bg-yt-light dark:bg-[#272727] rounded-lg p-1 flex-shrink-0 self-start sm:self-center">
+                            <button
+                                onClick={() => handleModeChange('embed')}
+                                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                                    playerMode === 'embed' 
+                                    ? 'bg-white dark:bg-yt-spec-20 text-black dark:text-white shadow-sm' 
+                                    : 'text-yt-light-gray hover:text-black dark:hover:text-white'
+                                }`}
+                            >
+                                Player
+                            </button>
+                            <button
+                                onClick={() => handleModeChange('stream')}
+                                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                                    playerMode === 'stream' 
+                                    ? 'bg-white dark:bg-yt-spec-20 text-black dark:text-white shadow-sm' 
+                                    : 'text-yt-light-gray hover:text-black dark:hover:text-white'
+                                }`}
+                            >
+                                Streaming
+                            </button>
+                        </div>
+                    </div>
 
                     {/* Actions Bar Container */}
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 pb-2">
@@ -282,7 +365,7 @@ const VideoPlayerPage: React.FC = () => {
                                                 </div>
                                             </div>
 
-                                            {/* Collaborators Dropdown - Moved outside the trigger div to prevent bubbling issues */}
+                                            {/* Collaborators Dropdown */}
                                             {isCollaboratorMenuOpen && (
                                                 <div className="absolute top-full left-0 mt-2 w-64 bg-yt-white dark:bg-yt-light-black rounded-lg shadow-xl border border-yt-spec-light-20 dark:border-yt-spec-20 z-50 overflow-hidden">
                                                     <div className="px-4 py-2 text-xs font-bold text-yt-light-gray border-b border-yt-spec-light-20 dark:border-yt-spec-20">
@@ -353,14 +436,13 @@ const VideoPlayerPage: React.FC = () => {
                             >
                                 <SaveIcon />
                             </button>
-                            
-                            <button className="flex items-center justify-center bg-yt-light dark:bg-[#272727] rounded-full w-9 h-9 hover:bg-[#e5e5e5] dark:hover:bg-[#3f3f3f] transition-colors flex-shrink-0 hidden sm:flex">
-                                <ThanksIcon />
-                            </button>
 
-                            <button className="flex items-center bg-yt-light dark:bg-[#272727] rounded-full h-9 px-3 sm:px-4 hover:bg-[#e5e5e5] dark:hover:bg-[#3f3f3f] transition-colors whitespace-nowrap gap-2 flex-shrink-0">
+                            <button 
+                                onClick={handleDownloadClick}
+                                className="flex items-center bg-yt-light dark:bg-[#272727] rounded-full h-9 px-3 sm:px-4 hover:bg-[#e5e5e5] dark:hover:bg-[#3f3f3f] transition-colors whitespace-nowrap gap-2 flex-shrink-0"
+                            >
                                 <DownloadIcon />
-                                <span className="text-sm font-semibold hidden sm:inline">オフライン</span>
+                                <span className="text-sm font-semibold hidden sm:inline">ダウンロード</span>
                             </button>
 
                             <button className="flex items-center justify-center bg-yt-light dark:bg-[#272727] rounded-full w-9 h-9 hover:bg-[#e5e5e5] dark:hover:bg-[#3f3f3f] transition-colors flex-shrink-0">
@@ -440,8 +522,98 @@ const VideoPlayerPage: React.FC = () => {
                 </div>
             </div>
             
+            {/* Modals */}
             {isPlaylistModalOpen && (
                 <PlaylistModal isOpen={isPlaylistModalOpen} onClose={() => setIsPlaylistModalOpen(false)} video={videoForPlaylistModal} />
+            )}
+
+            {isDownloadModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60]" onClick={() => setIsDownloadModalOpen(false)}>
+                     <div className="bg-yt-white dark:bg-[#1f1f1f] w-full max-w-md rounded-xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center p-4 border-b border-yt-spec-light-20 dark:border-yt-spec-20">
+                            <h3 className="font-bold text-lg text-black dark:text-white">ダウンロード</h3>
+                            <button onClick={() => setIsDownloadModalOpen(false)} className="p-2 hover:bg-yt-spec-10 rounded-full">
+                                <CloseIcon />
+                            </button>
+                        </div>
+                        <div className="p-4 max-h-[70vh] overflow-y-auto">
+                            {isStreamLoading ? (
+                                <div className="flex flex-col items-center justify-center py-8">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-yt-blue mb-2"></div>
+                                    <p className="text-sm text-yt-light-gray">リンクを解析中...</p>
+                                </div>
+                            ) : streamData ? (
+                                <div className="space-y-4">
+                                    {streamData.combinedFormats && streamData.combinedFormats.length > 0 && (
+                                        <div>
+                                            <h4 className="text-sm font-bold text-yt-light-gray mb-2 uppercase">ビデオ (映像+音声)</h4>
+                                            <div className="space-y-2">
+                                                {streamData.combinedFormats.map((fmt, idx) => (
+                                                    <a 
+                                                        key={idx} 
+                                                        href={fmt.url} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer" 
+                                                        className="flex items-center justify-between p-3 bg-yt-light dark:bg-yt-spec-10 rounded-lg hover:bg-gray-200 dark:hover:bg-yt-spec-20 transition-colors"
+                                                    >
+                                                        <span className="text-sm font-semibold text-black dark:text-white">{fmt.quality}</span>
+                                                        <span className="text-xs text-yt-light-gray uppercase">{fmt.container}</span>
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {streamData.separate1080p && streamData.separate1080p.video && (
+                                        <div>
+                                            <h4 className="text-sm font-bold text-yt-light-gray mb-2 uppercase">高画質 (映像・音声分離)</h4>
+                                            <div className="space-y-2">
+                                                <a 
+                                                    href={streamData.separate1080p.video.url}
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer" 
+                                                    className="flex items-center justify-between p-3 bg-yt-light dark:bg-yt-spec-10 rounded-lg hover:bg-gray-200 dark:hover:bg-yt-spec-20 transition-colors"
+                                                >
+                                                    <span className="text-sm font-semibold text-black dark:text-white">1080p Video</span>
+                                                    <span className="text-xs text-yt-light-gray">MP4 (No Audio)</span>
+                                                </a>
+                                                {streamData.separate1080p.audio && (
+                                                    <a 
+                                                        href={streamData.separate1080p.audio.url}
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer" 
+                                                        className="flex items-center justify-between p-3 bg-yt-light dark:bg-yt-spec-10 rounded-lg hover:bg-gray-200 dark:hover:bg-yt-spec-20 transition-colors"
+                                                    >
+                                                        <span className="text-sm font-semibold text-black dark:text-white">Audio Track</span>
+                                                        <span className="text-xs text-yt-light-gray">{streamData.separate1080p.audio.quality}</span>
+                                                    </a>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-red-500 mt-1">※1080pは映像と音声が別々です。両方DLして再生ソフトで結合再生してください。</p>
+                                        </div>
+                                    )}
+
+                                    {streamData.audioOnlyFormat && (
+                                        <div>
+                                            <h4 className="text-sm font-bold text-yt-light-gray mb-2 uppercase">オーディオのみ</h4>
+                                            <a 
+                                                href={streamData.audioOnlyFormat.url}
+                                                target="_blank" 
+                                                rel="noopener noreferrer" 
+                                                className="flex items-center justify-between p-3 bg-yt-light dark:bg-yt-spec-10 rounded-lg hover:bg-gray-200 dark:hover:bg-yt-spec-20 transition-colors"
+                                            >
+                                                <span className="text-sm font-semibold text-black dark:text-white">{streamData.audioOnlyFormat.quality}</span>
+                                                <span className="text-xs text-yt-light-gray uppercase">{streamData.audioOnlyFormat.container}</span>
+                                            </a>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-center text-red-500 py-4">リンクの取得に失敗しました。</p>
+                            )}
+                        </div>
+                     </div>
+            </div>
             )}
         </div>
     );

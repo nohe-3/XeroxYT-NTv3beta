@@ -140,3 +140,20 @@ export interface ChannelHomeData {
     topVideo?: HomeVideo;
     playlists: HomePlaylist[];
 }
+
+export interface StreamFormat {
+    quality: string;
+    container: string;
+    url: string;
+}
+
+export interface StreamData {
+    streamingUrl: string | null;
+    streamType: string;
+    combinedFormats: StreamFormat[];
+    audioOnlyFormat: StreamFormat | null;
+    separate1080p: {
+        video: StreamFormat;
+        audio: StreamFormat | null;
+    } | null;
+}
