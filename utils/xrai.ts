@@ -27,8 +27,7 @@ const JAPANESE_STOP_WORDS = new Set([
   'about', 'and', 'the', 'to', 'a', 'of', 'in', 'for', 'on', 'with', 'as', 'at'
 ]);
 
-// Intl.Segmenter available in modern browsers (Chrome 87+, Safari 14.1+, Firefox 125+)
-// Fallback to simple splitting if not available.
+// Fix: Explicitly cast Intl to any to allow access to Segmenter which may not be in all TS lib definitions
 const segmenter = (typeof Intl !== 'undefined' && (Intl as any).Segmenter) 
     ? new (Intl as any).Segmenter('ja', { granularity: 'word' }) 
     : null;
@@ -89,8 +88,6 @@ export const buildUserProfile = (sources: UserSources): UserProfile => {
     const weight = 3.0 * Math.exp(-index / 10);
     addKeywords(video.title, weight);
     addKeywords(video.channelName, weight * 1.2); // Channel affinity
-    // Description is noisy, lower weight
-    // addKeywords(video.descriptionSnippet || '', weight * 0.2); 
   });
 
   // 3. Subscriptions: Long-term interest
@@ -120,9 +117,6 @@ const parseUploadedAt = (uploadedAt: string): number => {
 
 const parseViews = (viewsStr: string): number => {
     if (!viewsStr) return 0;
-    // Remove non-numeric except dots/k/m for simple parsing if needed, 
-    // but our API returns formatted strings like "1.2万回" or "100K"
-    // Let's try to extract numbers.
     let mult = 1;
     if (viewsStr.includes('万')) mult = 10000;
     else if (viewsStr.includes('億')) mult = 100000000;
@@ -154,7 +148,7 @@ export const rankVideos = (
     // Penalty for already watched videos (diminishing return)
     let historyPenalty = 1.0;
     if (seenIds.has(video.id)) {
-        historyPenalty = 0.1; // Significantly reduce score but don't hide completely if relevant
+        historyPenalty = 0.1; 
     }
 
     // 1. Relevance Score (Keyword Match)
@@ -168,26 +162,25 @@ export const rankVideos = (
 
     // 2. Popularity Score (Log scale)
     const views = parseViews(video.views);
-    const popularityScore = Math.log10(views + 1); // 10k views -> 4, 1m -> 6
+    const popularityScore = Math.log10(views + 1); 
 
     // 3. Freshness Score
     const daysAgo = parseUploadedAt(video.uploadedAt);
-    // Bonus for very new videos (under 3 days), smooth decay after
     let freshnessScore = 0;
     if (daysAgo <= 3) freshnessScore = 5;
     else freshnessScore = Math.max(0, 4 - Math.log2(daysAgo)); 
 
-    // 4. Random Jitter (Randomness)
-    // Adds up to 40% random boost to the score to ensure variety
-    const randomJitter = Math.random() * 0.4; 
+    // 4. Random Jitter (Entropy/Randomness)
+    // Adds +/- 20% random factor to ensure the feed isn't static
+    const randomJitter = (Math.random() - 0.5) * 0.4; 
 
-    // 5. Diversity/Discovery Weights (Heuristic constants)
     const baseScore = (
-        (relevanceScore * 2.0) + 
+        (relevanceScore * 2.5) + 
         (popularityScore * 0.5) + 
-        (freshnessScore * 1.2)
+        (freshnessScore * 1.0)
     ) * historyPenalty;
 
+    // Apply Jitter
     const finalScore = baseScore * (1 + randomJitter);
     
     scoredVideos.push({ video, score: finalScore });
@@ -196,11 +189,10 @@ export const rankVideos = (
   // Sort by score descending
   scoredVideos.sort((a, b) => b.score - a.score);
 
-  // 6. Diversity Filter (Post-Ranking)
-  // Prevent one channel from dominating the feed
+  // 6. Diversity Filter (Limit videos from same channel)
   const finalRankedList: Video[] = [];
   const channelCount = new Map<string, number>();
-  const MAX_FROM_SAME_CHANNEL = 3; // Slightly increased for larger feeds
+  const MAX_FROM_SAME_CHANNEL = 4; 
 
   for (const { video } of scoredVideos) {
     const count = channelCount.get(video.channelId) || 0;

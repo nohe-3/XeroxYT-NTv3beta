@@ -371,14 +371,14 @@ app.get('/api/fvideo', async (req, res) => {
     const youtube = await createYoutube();
     const home = await youtube.getHomeFeed();
     let allVideos = home.videos ? [...home.videos] : [];
-    const MAX_VIDEOS = 200; // 一度に取得する目標数
+    const MAX_VIDEOS = 180; // 目標数 (約150以上)
     
     // 続きの動画を積極的に取得してボリュームを確保
     let attempts = 0;
     let currentFeed = home;
     
-    // 最大10回または200本超えるまでループ
-    while (currentFeed.has_continuation && attempts < 10 && allVideos.length < MAX_VIDEOS) {
+    // API速度を考慮し、最大6回の試行で止める（1回あたり約30動画なのでこれで180近くなる）
+    while (currentFeed.has_continuation && attempts < 6 && allVideos.length < MAX_VIDEOS) {
         try {
             currentFeed = await currentFeed.getContinuation();
             if (currentFeed.videos) {
