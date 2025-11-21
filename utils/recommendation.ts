@@ -13,6 +13,12 @@ const NOISE_BLOCK_KEYWORDS = [
     'NHK', '日テレ', 'FNN', 'TBS', 'ANN', 'テレ東'
 ];
 
+// 多様性を確保するための10の固定カテゴリ
+const DIVERSE_CATEGORIES = [
+    '音楽', 'ゲーム実況', 'エンタメ', 'お笑い', 'ガジェット',
+    'アニメ', 'スポーツ', 'ペット', '料理', 'Vlog'
+];
+
 interface RecommendationSource {
     searchHistory: string[];
     watchHistory: Video[];
@@ -77,13 +83,9 @@ const isValidRecommendation = (video: Video, source: RecommendationSource): bool
     }
 
     // 4. Japanese Content Priority for Home Feed
-    // (英語の学習動画などを除き、基本は日本語圏の動画を表示するほうが自然)
-    // ただし、ユーザーが登録しているチャンネル等は許可
     const isSubscribed = source.subscribedChannels.some(c => c.id === video.channelId);
     if (!isSubscribed && !containsJapanese(fullText) && !containsJapanese(video.descriptionSnippet || '')) {
-        // 完全に外国語の動画はおすすめから少し弾く（精度向上のため）
-        // ただし音楽(Music/MV)などは許可したいが、判定が難しいため、ここでは簡易的に弾く
-        // return false; // 厳しくしすぎるとコンテンツが減るため一旦コメントアウト
+        // 外国語コンテンツのフィルタリング（厳密にしすぎない）
     }
 
     return true;
@@ -92,8 +94,7 @@ const isValidRecommendation = (video: Video, source: RecommendationSource): bool
 // --- Core Recommendation Engine ---
 
 /**
- * YouTubeの「関連動画」アルゴリズムを擬似的に再現する。
- * ユーザーの履歴に基づいて「次にこれを見るべき」動画を取得する。
+ * YouTubeの「関連動画」アルゴリズムを擬似的に再現しつつ、10の分野から多様なコンテンツを混ぜ込む。
  */
 export const getDeeplyAnalyzedRecommendations = async (sources: RecommendationSource): Promise<Video[]> => {
     const { 
@@ -109,17 +110,13 @@ export const getDeeplyAnalyzedRecommendations = async (sources: RecommendationSo
 
     // ------------------------------------------------------------
     // Strategy 1: "Continue Watching" Context (関連動画ウォーク)
-    // 直近で見た動画の「関連動画」を取得する。これがYouTubeの精度に最も近い。
+    // 直近で見た動画の「関連動画」を取得するが、数が多すぎると偏るので制限する
     // ------------------------------------------------------------
     if (watchHistory.length > 0) {
-        // 最新の履歴からいくつかピックアップ（ランダム性を持たせてマンネリ防止）
-        // ページが進むごとに、より古い履歴も参照する
-        const historyDepth = Math.min(watchHistory.length, 5);
+        const historyDepth = Math.min(watchHistory.length, 3); // 参照する履歴数を減らす
         const targetIndices = new Set<number>();
         
-        // 常に最新1件は参照
         targetIndices.add(0); 
-        // 追加でランダムに1~2件参照
         if (historyDepth > 1) targetIndices.add(Math.floor(Math.random() * historyDepth));
         
         targetIndices.forEach(index => {
@@ -127,7 +124,7 @@ export const getDeeplyAnalyzedRecommendations = async (sources: RecommendationSo
             if (video && video.id) {
                 promises.push(
                     getVideoDetails(video.id)
-                        .then(details => details.relatedVideos || [])
+                        .then(details => (details.relatedVideos || []).slice(0, 8)) // 1つの動画につき関連動画は8個まで
                         .catch(() => [])
                 );
             }
@@ -135,57 +132,54 @@ export const getDeeplyAnalyzedRecommendations = async (sources: RecommendationSo
     }
 
     // ------------------------------------------------------------
-    // Strategy 2: "Your Interests" (検索履歴ベース)
-    // 過去に検索したワードで再検索し、新しい動画を探す
+    // Strategy 2: "Explicit Preferences" (タグ・登録チャンネル)
     // ------------------------------------------------------------
-    if (searchHistory.length > 0) {
-        // ランダムに1つキーワードを選ぶ
-        const keyword = searchHistory[Math.floor(Math.random() * searchHistory.length)];
-        // ページネーション: 深いページほど検索結果の奥を表示するわけではないが、
-        // 検索クエリを変えることで多様性を出す
-        promises.push(
-            searchVideos(keyword, '1') // 検索は常に1ページ目で良い（精度高）
-                .then(res => res.videos)
-                .catch(() => [])
-        );
-    }
-
-    // ------------------------------------------------------------
-    // Strategy 3: "Explicit Preferences" (タグ・登録チャンネル)
-    // ユーザーが明示的に「好き」と言ったもの
-    // ------------------------------------------------------------
-    
-    // 好きなジャンル（タグ）がある場合
     if (preferredGenres.length > 0) {
-        const genre = preferredGenres[Math.floor(Math.random() * preferredGenres.length)];
-        promises.push(
-            searchVideos(genre, '1')
-                .then(res => res.videos)
-                .catch(() => [])
-        );
+        // ランダムに2つのジャンルをピックアップ
+        const genres = shuffleArray(preferredGenres).slice(0, 2);
+        genres.forEach(genre => {
+            promises.push(
+                searchVideos(genre, '1')
+                    .then(res => res.videos.slice(0, 5))
+                    .catch(() => [])
+            );
+        });
     }
 
-    // 登録チャンネルからの新着（ホーム画面に混ぜる）
     if (subscribedChannels.length > 0) {
-        // ランダムに3チャンネル選んで最新動画を取得
         const randomSubs = shuffleArray(subscribedChannels).slice(0, 3);
         randomSubs.forEach(sub => {
             promises.push(
                 getChannelVideos(sub.id)
-                    .then(res => res.videos.slice(0, 5)) // 最新5件くらい
+                    .then(res => res.videos.slice(0, 4))
                     .catch(() => [])
             );
         });
     }
 
     // ------------------------------------------------------------
+    // Strategy 3: "Forced Diversity" (10 Fields)
+    // 特定のジャンル（ボカロなど）に偏らないよう、固定の10カテゴリからランダムに混ぜる
+    // ------------------------------------------------------------
+    // ページごとに異なるカテゴリを混ぜるため、シャッフルして数個選ぶ
+    const diversityCount = 5; // 1回のロードで混ぜるカテゴリ数
+    const selectedCategories = shuffleArray(DIVERSE_CATEGORIES).slice(0, diversityCount);
+    
+    selectedCategories.forEach(cat => {
+        promises.push(
+            searchVideos(cat, '1')
+                .then(res => res.videos.slice(0, 5)) // 各カテゴリから5動画
+                .catch(() => [])
+        );
+    });
+
+    // ------------------------------------------------------------
     // Strategy 4: "General Popularity" (急上昇・フォールバック)
-    // 履歴が少ない場合や、多様性のために急上昇を混ぜる
     // ------------------------------------------------------------
     if (watchHistory.length < 5 || page === 1) {
         promises.push(
-            getRecommendedVideos() // API側の急上昇(Trending)
-                .then(res => res.videos)
+            getRecommendedVideos()
+                .then(res => res.videos.slice(0, 10))
                 .catch(() => [])
         );
     }
@@ -199,19 +193,15 @@ export const getDeeplyAnalyzedRecommendations = async (sources: RecommendationSo
     // ------------------------------------------------------------
     const uniqueVideos: Video[] = [];
     const seenIds = new Set<string>();
-    
-    // 既に履歴にある動画は、おすすめから除外するか？
-    // YouTubeは「もう一度見る」を出すが、ここでは新しい発見を優先して除外気味にする
-    // ただし、直近10件以外は許容する
     const recentHistoryIds = new Set(watchHistory.slice(0, 10).map(v => v.id));
 
-    // シャッフルしてからフィルタリング（偏りを防ぐ）
+    // シャッフルしてからフィルタリング
     candidates = shuffleArray(candidates);
 
     for (const video of candidates) {
         if (!video.id) continue;
         if (seenIds.has(video.id)) continue;
-        if (recentHistoryIds.has(video.id)) continue; // 直近見た動画は出さない
+        if (recentHistoryIds.has(video.id)) continue;
 
         if (isValidRecommendation(video, sources)) {
             seenIds.add(video.id);
