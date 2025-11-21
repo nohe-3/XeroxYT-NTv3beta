@@ -34,6 +34,8 @@ const parseDuration = (iso: string, text: string): number => {
     return 0;
 }
 
+const MAX_FEED_VIDEOS = 500;
+
 const HomePage: React.FC = () => {
     const [feed, setFeed] = useState<Video[]>([]);
     const [shortsFeed, setShortsFeed] = useState<Video[]>([]);
@@ -98,30 +100,42 @@ const HomePage: React.FC = () => {
                     // AI Strategy: Generate queries based on user profile
                     queries = await getAiRecommendations();
                 } else {
-                    // Fallback Strategy: Client-side Keyphrase Extraction
-                    // Extract important keywords from history and create OR search queries
+                    // Fallback Strategy: Heuristic "Thinking"
+                    // Instead of simple extraction, we derive associations and expanded interests
                     const profile = buildUserProfile({
                         watchHistory,
-                        searchHistory: [],
-                        subscribedChannels: []
+                        searchHistory: searchHistory.slice(0, 5),
+                        subscribedChannels: subscribedChannels.slice(0, 5)
                     });
                     
+                    // Get top 6 interests
                     const interests = inferTopInterests(profile, 6);
-                    if (interests.length > 0) {
-                        // Create combinations of OR queries for variety
-                        // e.g. "Interest1 OR Interest2"
-                        const q1 = interests.slice(0, 3).join(' OR ');
-                        const q2 = interests.slice(3, 6).join(' OR ');
-                        queries = [q1, q2].filter(q => q);
+                    
+                    if (interests.length >= 2) {
+                        // Strategy 1: Association (Cross-pollination)
+                        // Combine two different top interests to find intersection (e.g., "Gaming OR Music")
+                        const queryMix = `${interests[0]} OR ${interests[1]}`;
+                        queries.push(queryMix);
+
+                        // Strategy 2: Expansion (Discovery)
+                        // Add discovery modifiers to the top interest
+                        const topInterest = interests[0];
+                        queries.push(`${topInterest} おすすめ related`);
+                        queries.push(`${topInterest} new trending`);
+                    } else if (interests.length === 1) {
+                        queries.push(`${interests[0]} similar related`);
+                        queries.push(`${interests[0]} mix`);
                     } else if (watchHistory.length > 0) {
-                        // Simple fallback if no semantic keywords found
-                        queries = [`${watchHistory[0].title} OR ${watchHistory[0].channelName}`];
+                        // Deep Fallback: Use title words from recent history
+                        const recent = watchHistory[0];
+                        queries.push(`${recent.channelName} related`);
                     }
                 }
 
                 if (queries.length > 0) {
                     // Pick one query randomly to mix in
                     const query = queries[Math.floor(Math.random() * queries.length)];
+                    console.log(`[Discovery] Searching for: ${query}`);
                     
                     // Search using the query (OR search is handled by YouTube API if query contains "OR")
                     const searchRes = await searchVideos(query, '1');
@@ -168,7 +182,7 @@ const HomePage: React.FC = () => {
         } catch (e) {
             console.warn("AI augmentation background task failed", e);
         }
-    }, [getAiRecommendations, aiMode, feed, discoveryVideoCache, isLoaded, watchHistory]);
+    }, [getAiRecommendations, aiMode, feed, discoveryVideoCache, isLoaded, watchHistory, searchHistory, subscribedChannels]);
 
     // Trigger AI Augmentation (or Fallback) when feed is ready
     useEffect(() => {
@@ -180,6 +194,13 @@ const HomePage: React.FC = () => {
 
     const loadRecommendations = useCallback(async (pageNum: number) => {
         if (aiMode) return;
+        
+        // Stop loading if we hit the limit
+        if (feed.length >= MAX_FEED_VIDEOS) {
+            setHasNextPage(false);
+            setIsFetchingMore(false);
+            return;
+        }
 
         const isInitial = pageNum === 1;
         if (isInitial) {
@@ -199,7 +220,8 @@ const HomePage: React.FC = () => {
                     preferredGenres, preferredChannels, ngKeywords, ngChannels,
                     page: pageNum
                 });
-                setHasNextPage(true); 
+                // XRAI always attempts to return content, so we assume there's more
+                setHasNextPage(feed.length < MAX_FEED_VIDEOS); 
             } else {
                 if (pageNum > 1) {
                     setIsFetchingMore(false);
@@ -231,7 +253,14 @@ const HomePage: React.FC = () => {
                 setFeed(newVideos);
                 setShortsFeed(newShorts);
             } else {
-                setFeed(prev => [...prev, ...newVideos]);
+                setFeed(prev => {
+                    const combined = [...prev, ...newVideos];
+                    if (combined.length >= MAX_FEED_VIDEOS) {
+                         setHasNextPage(false);
+                         return combined.slice(0, MAX_FEED_VIDEOS);
+                    }
+                    return combined;
+                });
                 setShortsFeed(prev => [...prev, ...newShorts]);
             }
 
@@ -244,7 +273,7 @@ const HomePage: React.FC = () => {
             setIsLoading(false);
             setIsFetchingMore(false);
         }
-    }, [subscribedChannels, searchHistory, watchHistory, preferredGenres, preferredChannels, ngKeywords, ngChannels, useXrai, aiMode]);
+    }, [subscribedChannels, searchHistory, watchHistory, preferredGenres, preferredChannels, ngKeywords, ngChannels, useXrai, aiMode, feed.length]);
 
     useEffect(() => {
         if (!aiMode) {
@@ -293,7 +322,7 @@ const HomePage: React.FC = () => {
     }
 
     const loadMore = () => {
-        if (!isFetchingMore && !isLoading && hasNextPage && !aiMode) {
+        if (!isFetchingMore && !isLoading && hasNextPage && !aiMode && feed.length < MAX_FEED_VIDEOS) {
             const nextPage = page + 1;
             setPage(nextPage);
             loadRecommendations(nextPage);
@@ -391,7 +420,7 @@ const HomePage: React.FC = () => {
                         AIキュレーターの選定
                     </h2>
                     <p className="text-sm text-yt-light-gray mt-1 pb-2">
-                        ローカルLLMがあなたの興味に基づいて生成した、新しい発見のためのプレイリストです。
+                        ローカルLLMがあなたの興味に基づいて生成したプレイリストです。
                     </p>
                 </div>
             )}
@@ -422,8 +451,12 @@ const HomePage: React.FC = () => {
                 </div>
             )}
 
-            {!isLoading && hasNextPage && feed.length > 0 && !aiMode && (
-                <div ref={lastElementRef} className="h-20 flex justify-center items-center" />
+            {!isLoading && hasNextPage && !aiMode && (
+                <div ref={lastElementRef} className="h-20 flex justify-center items-center">
+                     {feed.length >= MAX_FEED_VIDEOS && (
+                        <p className="text-yt-light-gray text-sm">これ以上の動画は表示されません（上限500件）</p>
+                     )}
+                </div>
             )}
         </div>
     );

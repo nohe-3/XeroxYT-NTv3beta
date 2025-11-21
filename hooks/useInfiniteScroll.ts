@@ -13,7 +13,8 @@ export const useInfiniteScroll = (callback: () => void, hasMore: boolean, isLoad
                 callback();
             }
         }, {
-            rootMargin: '200px', // 少し早めに読み込む
+            // トリガー位置を大幅に広げて、スクロールの下端に着く前に次の読み込みを開始する
+            rootMargin: '1500px', 
         });
         
         if (node) observer.current.observe(node);
