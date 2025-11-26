@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import { MenuIcon, YouTubeLogo, SearchIcon, SettingsIcon, SaveIcon, DownloadIcon, TrashIcon, HistoryIcon, CheckIcon, SunIcon, MoonIcon, LightbulbIcon } from './icons/Icons';
@@ -86,8 +85,9 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
     };
   }, []);
   
+  // High Transparency for Glass Themes
   const headerBgClass = theme.includes('glass')
-    ? 'bg-yt-white/40 dark:bg-yt-black/40 backdrop-blur-xl border-b border-white/10 dark:border-white/10'
+    ? 'bg-yt-white/20 dark:bg-black/20 backdrop-blur-2xl border-b border-white/5 dark:border-white/5'
     : 'bg-yt-white dark:bg-yt-black border-b border-yt-spec-light-20 dark:border-yt-spec-20';
 
   const ThemeSelectItem: React.FC<{ value: Theme, label: string, icon: React.ReactNode }> = ({ value, label, icon }) => (
@@ -121,7 +121,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
       {/* Center Section */}
       <div className="flex-1 flex justify-center px-4 lg:px-16 max-w-[720px] mx-auto">
         <form onSubmit={handleSearch} className="w-full flex items-center gap-4">
-          <div className="flex w-full items-center rounded-full shadow-inner border border-yt-light-gray/20 dark:border-[#303030] bg-transparent focus-within:border-yt-blue transition-colors overflow-hidden ml-0 md:ml-8">
+          <div className="flex w-full items-center rounded-full shadow-inner border border-yt-light-gray/20 dark:border-white/10 bg-white/20 dark:bg-black/20 focus-within:border-yt-blue focus-within:bg-white/40 dark:focus-within:bg-black/40 transition-all overflow-hidden ml-0 md:ml-8 backdrop-blur-sm">
             <div className="flex-1 relative">
                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none sm:hidden">
                     <SearchIcon />
@@ -131,12 +131,12 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="検索"
-                className="w-full h-10 bg-transparent pl-10 sm:pl-4 pr-4 text-base text-black dark:text-white placeholder-yt-light-gray focus:outline-none dark:bg-[#121212]/50"
+                className="w-full h-10 bg-transparent pl-10 sm:pl-4 pr-4 text-base text-black dark:text-white placeholder-yt-light-gray focus:outline-none"
                 />
             </div>
             <button
                 type="submit"
-                className="bg-yt-light/50 dark:bg-[#222222]/50 h-10 px-6 border-l border-yt-light-gray/20 dark:border-[#303030] hover:bg-stone-200 dark:hover:bg-[#2a2a2a] transition-colors w-16 flex items-center justify-center"
+                className="bg-yt-light/50 dark:bg-white/5 h-10 px-6 border-l border-yt-light-gray/20 dark:border-white/10 hover:bg-stone-200 dark:hover:bg-white/10 transition-colors w-16 flex items-center justify-center"
                 aria-label="検索"
             >
                 <SearchIcon />
@@ -156,7 +156,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
                 <SettingsIcon />
             </button>
             
-            <div className={`absolute top-12 right-0 w-72 bg-yt-white/80 dark:bg-yt-light-black/80 backdrop-blur-xl rounded-lg shadow-lg border border-yt-spec-light-20 dark:border-yt-spec-20 py-2 overflow-hidden z-50 transition-all duration-200 ease-out ${isSettingsOpen ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}>
+            <div className={`absolute top-12 right-0 w-72 bg-yt-white/70 dark:bg-black/70 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/20 dark:border-white/10 py-2 overflow-hidden z-50 transition-all duration-200 ease-out ${isSettingsOpen ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}>
                 <div className="py-2">
                     <div className="px-4 py-2 text-xs font-bold text-yt-light-gray uppercase tracking-wider">テーマ</div>
                     <ThemeSelectItem value="light-glass" label="ライト (ガラス)" icon={<SunIcon />} />

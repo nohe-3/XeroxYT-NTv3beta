@@ -10,7 +10,7 @@ import { useSubscription } from '../contexts/SubscriptionContext';
 import { usePreference } from '../contexts/PreferenceContext';
 import HorizontalScrollContainer from '../components/HorizontalScrollContainer';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { BlockIcon, PlayIcon } from '../components/icons/Icons';
+import { BlockIcon } from '../components/icons/Icons';
 
 const { useParams, Link } = ReactRouterDOM;
 

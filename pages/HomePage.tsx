@@ -51,7 +51,7 @@ const HomePage: React.FC = () => {
     const { subscribedChannels } = useSubscription();
     const { searchHistory } = useSearchHistory();
     const { history: watchHistory } = useHistory();
-    const { ngKeywords, ngChannels, exportUserData, importUserData } = usePreference();
+    const { ngKeywords, ngChannels, hiddenVideoIds, negativeKeywords, exportUserData, importUserData } = usePreference();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Update feed length ref whenever feed changes
@@ -85,7 +85,7 @@ const HomePage: React.FC = () => {
         try {
             const rawVideos = await getXraiRecommendations({
                 searchHistory, watchHistory, subscribedChannels,
-                ngKeywords, ngChannels,
+                ngKeywords, ngChannels, hiddenVideoIds, negativeKeywords,
                 page: pageNum
             });
             
@@ -137,7 +137,7 @@ const HomePage: React.FC = () => {
             setIsLoading(false);
             setIsFetchingMore(false);
         }
-    }, [subscribedChannels, searchHistory, watchHistory, ngKeywords, ngChannels]);
+    }, [subscribedChannels, searchHistory, watchHistory, ngKeywords, ngChannels, hiddenVideoIds, negativeKeywords]);
 
     useEffect(() => {
         setPage(1);

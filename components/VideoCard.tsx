@@ -1,8 +1,8 @@
-
 import React, { useState, useRef, useEffect, memo } from 'react';
 import * as ReactRouterDOM from 'react-router-dom';
 import type { Video } from '../types';
-import { ChevronRightIcon } from './icons/Icons';
+import { ChevronRightIcon, MoreIconHorizontal, BlockIcon, TrashIcon } from './icons/Icons';
+import { usePreference } from '../contexts/PreferenceContext';
 
 const { Link } = ReactRouterDOM;
 
@@ -13,8 +13,14 @@ interface VideoCardProps {
 
 const VideoCard: React.FC<VideoCardProps> = memo(({ video, hideChannelInfo = false }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const settingsMenuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
+  const settingsTriggerRef = useRef<HTMLButtonElement>(null);
+
+  const { addNgChannel, addHiddenVideo, isvideoHidden } = usePreference();
+  const isHidden = isvideoHidden(video.id);
 
   const handleChannelLinkClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -26,40 +32,76 @@ const VideoCard: React.FC<VideoCardProps> = memo(({ video, hideChannelInfo = fal
       setIsMenuOpen(!isMenuOpen);
   };
 
+  const toggleSettingsMenu = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsSettingsMenuOpen(!isSettingsMenuOpen);
+  }
+
+  const handleNotInterested = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // XRAI analysis triggered via context
+      addHiddenVideo(video.id, { title: video.title, channelName: video.channelName });
+      setIsSettingsMenuOpen(false);
+  };
+
+  const handleBlockChannel = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (video.channelId) {
+          addNgChannel(video.channelId);
+      }
+      setIsSettingsMenuOpen(false);
+  };
+
   useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
+          // Collaborators menu
           if (
               menuRef.current && !menuRef.current.contains(event.target as Node) &&
               triggerRef.current && !triggerRef.current.contains(event.target as Node)
           ) {
               setIsMenuOpen(false);
           }
+          // Settings (3-dot) menu
+          if (
+              settingsMenuRef.current && !settingsMenuRef.current.contains(event.target as Node) &&
+              settingsTriggerRef.current && !settingsTriggerRef.current.contains(event.target as Node)
+          ) {
+              setIsSettingsMenuOpen(false);
+          }
       };
-      if(isMenuOpen) {
+      if(isMenuOpen || isSettingsMenuOpen) {
           document.addEventListener('mousedown', handleClickOutside);
       }
       return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isMenuOpen]);
+  }, [isMenuOpen, isSettingsMenuOpen]);
 
   const hasCollaborators = video.collaborators && video.collaborators.length > 1;
   
+  if (isHidden) return null;
+
   return (
-    <Link to={`/watch/${video.id}`} className="flex flex-col group cursor-pointer transition-transform duration-300 ease-in-out sm:hover:scale-[1.03] sm:hover:z-10">
-      <div className="relative rounded-xl overflow-hidden aspect-video bg-yt-light dark:bg-yt-dark-gray shadow-sm group-hover:shadow-xl transition-shadow duration-300">
-        <img 
-            src={video.thumbnailUrl} 
-            alt={video.title} 
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover" 
-        />
-        {video.duration && (
-            <span className="absolute bottom-1.5 right-1.5 bg-black/80 text-white text-xs font-medium px-1.5 py-0.5 rounded-[4px]">
-            {video.duration}
-            </span>
-        )}
-      </div>
-      <div className="flex mt-3 items-start">
+    <div className="flex flex-col group cursor-pointer transition-transform duration-300 ease-in-out sm:hover:scale-[1.03] sm:hover:z-10 relative">
+      <Link to={`/watch/${video.id}`}>
+        <div className="relative rounded-xl overflow-hidden aspect-video bg-yt-light dark:bg-yt-dark-gray shadow-sm group-hover:shadow-xl transition-shadow duration-300">
+            <img 
+                src={video.thumbnailUrl} 
+                alt={video.title} 
+                loading="lazy"
+                decoding="async"
+                className="w-full h-full object-cover" 
+            />
+            {video.duration && (
+                <span className="absolute bottom-1.5 right-1.5 bg-black/80 text-white text-xs font-medium px-1.5 py-0.5 rounded-[4px]">
+                {video.duration}
+                </span>
+            )}
+        </div>
+      </Link>
+      
+      <div className="flex mt-3 items-start pr-6 relative">
         {!hideChannelInfo && video.channelId && (
           <div className="flex-shrink-0 mr-3 relative">
             <Link to={`/channel/${video.channelId}`} onClick={handleChannelLinkClick}>
@@ -68,9 +110,11 @@ const VideoCard: React.FC<VideoCardProps> = memo(({ video, hideChannelInfo = fal
           </div>
         )}
         <div className="flex-1 min-w-0 relative">
-          <h3 className="text-black dark:text-white text-base font-semibold leading-snug line-clamp-2 mb-1">
-            {video.title}
-          </h3>
+          <Link to={`/watch/${video.id}`}>
+            <h3 className="text-black dark:text-white text-base font-semibold leading-snug line-clamp-2 mb-1">
+                {video.title}
+            </h3>
+          </Link>
           <div className="text-yt-light-gray text-sm">
             {!hideChannelInfo && video.channelId && (
                 <div className="relative">
@@ -119,8 +163,38 @@ const VideoCard: React.FC<VideoCardProps> = memo(({ video, hideChannelInfo = fal
             </p>
           </div>
         </div>
+
+        {/* 3-dot Menu */}
+        <button 
+            ref={settingsTriggerRef}
+            onClick={toggleSettingsMenu}
+            className="absolute top-0 right-[-8px] p-1 opacity-0 group-hover:opacity-100 transition-opacity rounded-full hover:bg-yt-spec-light-10 dark:hover:bg-yt-spec-10"
+        >
+            <div className="transform rotate-90">
+                <MoreIconHorizontal />
+            </div>
+        </button>
+
+        {isSettingsMenuOpen && (
+            <div ref={settingsMenuRef} className="absolute top-6 right-0 w-56 bg-yt-white dark:bg-yt-light-black rounded-lg shadow-xl border border-yt-spec-light-20 dark:border-yt-spec-20 z-50 overflow-hidden">
+                <button 
+                    onClick={handleNotInterested}
+                    className="flex items-center w-full px-4 py-3 hover:bg-yt-spec-light-10 dark:hover:bg-yt-spec-10 text-sm text-black dark:text-white text-left gap-3"
+                >
+                    <TrashIcon /> {/* Using TrashIcon as a proxy for 'Not Interested' icon */}
+                    興味なし
+                </button>
+                <button 
+                    onClick={handleBlockChannel}
+                    className="flex items-center w-full px-4 py-3 hover:bg-yt-spec-light-10 dark:hover:bg-yt-spec-10 text-sm text-black dark:text-white text-left gap-3"
+                >
+                    <BlockIcon />
+                    チャンネルをおすすめに表示しない
+                </button>
+            </div>
+        )}
       </div>
-    </Link>
+    </div>
   );
 });
 

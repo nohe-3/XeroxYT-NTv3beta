@@ -15,7 +15,7 @@ const BottomNavigation: React.FC = () => {
     }`;
   
   const bgClass = theme.includes('glass')
-    ? 'bg-yt-white/40 dark:bg-yt-black/40 backdrop-blur-xl'
+    ? 'bg-yt-white/20 dark:bg-black/20 backdrop-blur-xl'
     : 'bg-yt-white dark:bg-yt-black';
 
   return (

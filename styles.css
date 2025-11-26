@@ -2,31 +2,31 @@
 html.light body { background-color: hsl(0, 0%, 100%); }
 html.dark body { background-color: hsl(0, 0%, 6%); }
 
-/* iOS 26 Concept Style - Light Glass (Pastel Mesh) */
+/* iOS 26 Concept Style - Light Glass (Frosty Prism) */
 html.light-glass body {
-    background-color: #f0f2f5;
+    background-color: #f0f4f8;
     background-image: 
         radial-gradient(at 0% 0%, hsla(253,16%,7%,0) 0, transparent 50%), 
-        radial-gradient(at 50% 0%, hsla(225,39%,30%,0) 0, transparent 50%), 
-        radial-gradient(at 100% 0%, hsla(339,49%,30%,0) 0, transparent 50%);
+        radial-gradient(at 50% 100%, hsla(225,39%,30%,0) 0, transparent 50%);
     background: 
-        fixed radial-gradient(circle at 15% 50%, rgba(255, 230, 230, 0.8), transparent 50%),
-        fixed radial-gradient(circle at 85% 30%, rgba(230, 230, 255, 0.8), transparent 50%),
-        fixed radial-gradient(circle at 50% 80%, rgba(240, 255, 240, 0.8), transparent 50%),
-        fixed linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+        fixed radial-gradient(circle at 10% 20%, rgba(216, 235, 255, 0.8), transparent 40%),
+        fixed radial-gradient(circle at 90% 80%, rgba(255, 220, 240, 0.8), transparent 40%),
+        fixed radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.8), transparent 60%),
+        fixed linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
     background-size: 200% 200%;
-    animation: gradientAnimation 20s ease infinite;
+    animation: gradientAnimation 25s ease infinite;
 }
 
-/* iOS 26 Concept Style - Dark Glass (Deep Space Mesh) */
+/* iOS 26 Concept Style - Dark Glass (Deep Aurora) */
 html.dark-glass body {
     background-color: #000000;
     background: 
-        fixed radial-gradient(circle at 20% 20%, rgba(60, 20, 100, 0.6), transparent 60%),
-        fixed radial-gradient(circle at 80% 80%, rgba(20, 60, 100, 0.6), transparent 60%),
-        fixed radial-gradient(circle at 50% 50%, rgba(20, 20, 40, 0.8), transparent),
-        fixed linear-gradient(to bottom right, #0f2027, #203a43, #2c5364);
+        fixed radial-gradient(circle at 20% 10%, rgba(20, 0, 40, 0.8), transparent 50%),
+        fixed radial-gradient(circle at 80% 90%, rgba(0, 20, 40, 0.8), transparent 50%),
+        fixed radial-gradient(circle at 50% 50%, rgba(45, 10, 60, 0.4), transparent 60%),
+        fixed linear-gradient(to bottom right, #09090b, #111116, #0c0c14);
     background-size: 150% 150%;
+    animation: gradientAnimation 30s ease infinite alternate;
 }
 
 @keyframes gradientAnimation {
