@@ -27,7 +27,10 @@ const ChevronDownIcon = () => (
 );
 
 const ShortsPage: React.FC = () => {
-    const { videoId } = useParams<{ videoId: string }>();
+    const params = useParams();
+    // Handle both /shorts/:videoId and /shorts/* patterns
+    const videoId = params.videoId || params['*']; 
+    
     const location = useLocation();
     const navigate = useNavigate();
     const context = location.state?.context as { type: 'channel' | 'home' | 'search', channelId?: string } | undefined;
@@ -329,8 +332,8 @@ const ShortsPage: React.FC = () => {
                 <div className="relative h-[85vh] max-h-[900px] aspect-[9/16] rounded-2xl shadow-2xl overflow-hidden bg-black flex-shrink-0 z-10">
                      {videos.map((video, index) => {
                          // Unmount if too far away to save memory
-                         // Keep Prev 1, Current, Next 10 (To ensure instant loading for next 10 clicks)
-                         if (index < currentIndex - 1 || index > currentIndex + 10) return null;
+                         // Keep Current, Next 10. Unmount previous videos immediately to stop audio.
+                         if (index < currentIndex || index > currentIndex + 10) return null;
                          
                          const isActive = index === currentIndex;
                          

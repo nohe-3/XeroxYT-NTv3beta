@@ -89,8 +89,8 @@ const App: React.FC = () => {
                 <Route path="/channel/:channelId" element={<ChannelPage />} />
                 <Route path="/you" element={<YouPage />} />
                 <Route path="/playlist/:playlistId" element={<PlaylistPage />} />
-                <Route path="/shorts" element={<ShortsPage />} />
-                <Route path="/shorts/:videoId" element={<ShortsPage />} />
+                {/* Use wildcard to keep component mounted when switching videos */}
+                <Route path="/shorts/*" element={<ShortsPage />} />
                 <Route path="/subscriptions" element={<SubscriptionsPage />} />
                 <Route path="/history" element={<HistoryPage />} />
                 <Route path="/management" element={<ManagementPage />} /> {/* Add new route */}
