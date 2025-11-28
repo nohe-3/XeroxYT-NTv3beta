@@ -158,7 +158,7 @@ export const getXraiShorts = async (sources: RecommendationSource & { seenIds?: 
     } = sources;
 
     const TARGET_COUNT = 40;
-    const POPULAR_RATIO = 0.75;
+    const POPULAR_RATIO = 0.85;
 
     const allSeenIds = new Set([
         ...(shortsHistory || []).map(v => v.id),
