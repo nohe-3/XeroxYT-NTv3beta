@@ -158,6 +158,13 @@ export const CloseIcon: React.FC = () => (
   </svg>
 );
 
+{/* FIX: Add missing BlockIcon component */}
+export const BlockIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" focusable="false" className={iconClasses}>
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"></path>
+    </svg>
+);
+
 export const CheckIcon: React.FC<{className?: string}> = ({className}) => (
   <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" focusable="false" className={className || "fill-current text-yt-blue"}>
     <path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path>
@@ -225,19 +232,7 @@ export const AddToPlaylistIcon: React.FC = () => (
 );
 
 export const DragHandleIcon: React.FC = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" focusable="false" className={secondaryIconClasses}>
-        <path d="M9 4h2v2H9V4zm0 6h2v2H9v-2zm0 6h2v2H9v-2zm6-12h2v2h-2V4zm0 6h2v2h-2v-2zm0 6h2v2h-2v-2z"></path>
+    <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" focusable="false" className={iconClasses}>
+        <path d="M20 9H4v2h16V9zM4 15h16v-2H4v2z"></path>
     </svg>
-);
-
-export const BlockIcon: React.FC = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" focusable="false" className={iconClasses}>
-    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"></path>
-  </svg>
-);
-
-export const ImportExportIcon: React.FC = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" focusable="false" className={iconClasses}>
-    <path d="M9 3L5 6.99h3V14h2V6.99h3L9 3zm7 14.01V10h-2v7.01h-3L15 21l4-3.99h-3z"></path>
-  </svg>
 );
