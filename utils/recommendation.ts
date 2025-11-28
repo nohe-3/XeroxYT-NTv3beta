@@ -180,11 +180,22 @@ export const getXraiShorts = async (sources: RecommendationSource & { seenIds?: 
 
     // --- Candidate Generation (Robust Popularity Sources) ---
     
-    // 1. Popular/Trending Pool
-    // NOTE: getRecommendedVideos returns standard feed. We search specific generic high-traffic terms to force shorts.
-    const popularQueries = ["Trending #shorts", "Funny #shorts", "Viral #shorts", "Tiktok #shorts"];
+    // 1. Popular/Trending Pool (Japanese)
+    // 日本向けの一般的な人気ワードで検索して候補を確保する
+    const popularQueries = [
+        "急上昇 #shorts", 
+        "人気 #shorts", 
+        "バズってる #shorts", 
+        "面白い #shorts", 
+        "切り抜き #shorts", 
+        "猫 #shorts", 
+        "犬 #shorts", 
+        "アニメ #shorts", 
+        "歌ってみた #shorts", 
+        "踊ってみた #shorts"
+    ];
     // Shuffle queries to get variety each load
-    const selectedQueries = shuffleArray(popularQueries).slice(0, 2);
+    const selectedQueries = shuffleArray(popularQueries).slice(0, 3);
     
     const popularPromise = Promise.all([
         getRecommendedVideos().then(res => res.videos.filter(isShortVideo)).catch(() => []),
@@ -193,7 +204,7 @@ export const getXraiShorts = async (sources: RecommendationSource & { seenIds?: 
     
     // 2. Personalized Pool
     const topKeywords = [...userVector.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => e[0]);
-    const personalizedSeeds = topKeywords.length > 0 ? topKeywords.map(k => `${k} #shorts`) : ["Music #shorts"];
+    const personalizedSeeds = topKeywords.length > 0 ? topKeywords.map(k => `${k} #shorts`) : ["音楽 #shorts"];
     const personalizedPromise = Promise.all(personalizedSeeds.map(query => 
         searchVideos(query, '1').then(res => [...res.videos, ...res.shorts].filter(isShortVideo)).catch(() => [])
     )).then(results => results.flat());

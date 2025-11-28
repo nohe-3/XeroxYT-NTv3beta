@@ -12,8 +12,18 @@ import { LikeIcon, CommentIcon, CloseIcon, BlockIcon, TrashIcon } from '../compo
 import CommentComponent from '../components/Comment';
 import { useTheme } from '../hooks/useTheme';
 
-const ChevronUpIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" height="48" viewBox="0 0 24 24" width="48" className="fill-current text-black dark:text-white"><path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6 6-6 6z"/></svg> );
-const ChevronDownIcon = () => ( <svg xmlns="http://www.w3.org/2000/svg" height="48" viewBox="0 0 24 24" width="48" className="fill-current text-black dark:text-white"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg> );
+// Re-created Chevron Icons for better visibility
+const ChevronUpIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" className="fill-current text-black dark:text-white w-8 h-8">
+        <path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z"/>
+    </svg>
+);
+
+const ChevronDownIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" className="fill-current text-black dark:text-white w-8 h-8">
+        <path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/>
+    </svg>
+);
 
 const ShortsPage: React.FC = () => {
     const { videoId } = useParams<{ videoId: string }>();
@@ -370,8 +380,22 @@ const ShortsPage: React.FC = () => {
                     </div>
 
                     <div className="flex flex-col gap-4 mt-auto hidden md:flex">
-                        <button onClick={handlePrev} disabled={currentIndex === 0} className={`p-3 rounded-full bg-yt-light/50 dark:bg-yt-light-black/50 hover:bg-yt-light dark:hover:bg-yt-light-black backdrop-blur-sm transition-all ${currentIndex === 0 ? 'opacity-30 cursor-not-allowed' : ''}`}><ChevronUpIcon /></button>
-                        <button onClick={handleNext} disabled={currentIndex >= videos.length - 1 && !isFetchingMore} className={`p-3 rounded-full bg-yt-light/50 dark:bg-yt-light-black/50 hover:bg-yt-light dark:hover:bg-yt-light-black backdrop-blur-sm transition-all ${currentIndex >= videos.length - 1 && !isFetchingMore ? 'opacity-30 cursor-not-allowed' : ''}`}><ChevronDownIcon /></button>
+                        <button 
+                            onClick={handlePrev} 
+                            disabled={currentIndex === 0} 
+                            className={`p-3 rounded-full bg-yt-light/50 dark:bg-yt-light-black/50 hover:bg-yt-light dark:hover:bg-yt-light-black backdrop-blur-sm transition-all shadow-lg ${currentIndex === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:scale-110 active:scale-95'}`}
+                            title="前の動画"
+                        >
+                            <ChevronUpIcon />
+                        </button>
+                        <button 
+                            onClick={handleNext} 
+                            disabled={currentIndex >= videos.length - 1 && !isFetchingMore} 
+                            className={`p-3 rounded-full bg-yt-light/50 dark:bg-yt-light-black/50 hover:bg-yt-light dark:hover:bg-yt-light-black backdrop-blur-sm transition-all shadow-lg ${currentIndex >= videos.length - 1 && !isFetchingMore ? 'opacity-30 cursor-not-allowed' : 'hover:scale-110 active:scale-95'}`}
+                            title="次の動画"
+                        >
+                            <ChevronDownIcon />
+                        </button>
                     </div>
                 </div>
 
