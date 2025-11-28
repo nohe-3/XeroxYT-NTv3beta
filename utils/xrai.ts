@@ -56,6 +56,13 @@ export const calculateMagnitude = (vector: Map<string, number>): number => {
     return Math.sqrt(sumSq);
 };
 
+export const isJapaneseText = (text: string): boolean => {
+    // Hiragana, Katakana, Kanji, Zenkaku punctuation/numbers, CJK Unified Ideographs
+    // This regex checks if the string contains ANY Japanese-specific characters.
+    const jpRegex = /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/;
+    return jpRegex.test(text);
+};
+
 // --- User Profile Construction ---
 
 export const buildUserProfile = (sources: UserSources): UserProfile => {

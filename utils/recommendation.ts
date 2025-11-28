@@ -1,9 +1,10 @@
 
 
 
+
 import type { Video, Channel } from '../types';
 import { searchVideos, getRecommendedVideos, parseDuration } from './api';
-import { extractKeywords, calculateMagnitude } from './xrai';
+import { extractKeywords, calculateMagnitude, isJapaneseText } from './xrai';
 import type { BlockedChannel, HiddenVideo } from '../contexts/PreferenceContext';
 
 interface RecommendationSource {
@@ -268,6 +269,11 @@ export const getXraiShorts = async (sources: RecommendationSource & { seenIds?: 
             if (ngChannelIds.has(v.channelId)) return;
             const fullText = `${v.title} ${v.channelName}`.toLowerCase();
             if (ngKeywords.some(ng => fullText.includes(ng.toLowerCase()))) return;
+            
+            // Check for Japanese text only
+            const hasJapanese = isJapaneseText(v.title) || isJapaneseText(v.channelName);
+            if (!hasJapanese) return;
+
             if (!unique.has(v.id)) unique.set(v.id, v);
         });
 

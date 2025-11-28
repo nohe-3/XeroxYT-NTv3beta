@@ -56,7 +56,7 @@ const ShortsPage: React.FC = () => {
     const sendCommand = (iframe: HTMLIFrameElement, command: 'playVideo' | 'pauseVideo') => {
         if (iframe && iframe.contentWindow) {
             iframe.contentWindow.postMessage(
-                JSON.stringify({ event: 'command', func: command, args: '' }),
+                JSON.stringify({ event: 'command', func: command, args: [] }),
                 '*'
             );
         }
@@ -67,13 +67,18 @@ const ShortsPage: React.FC = () => {
         const currentVideo = videos[currentIndex];
         if (!currentVideo) return;
 
+        // First, pause all other videos to prevent audio overlap
         iframeRefs.current.forEach((iframe, id) => {
-            if (id === currentVideo.id) {
-                sendCommand(iframe, 'playVideo');
-            } else {
+            if (id !== currentVideo.id) {
                 sendCommand(iframe, 'pauseVideo');
             }
         });
+
+        // Then play the current one
+        const currentIframe = iframeRefs.current.get(currentVideo.id);
+        if (currentIframe) {
+            sendCommand(currentIframe, 'playVideo');
+        }
     }, [currentIndex, videos]);
 
     // URL Sync: Handle browser back/forward or external navigation
@@ -347,9 +352,12 @@ const ShortsPage: React.FC = () => {
                                     video={video} 
                                     playerParams={getParamsForVideo(index, video.id)} 
                                     onLoad={(e) => {
+                                        const iframe = e.currentTarget;
                                         if (index === currentIndex) {
-                                            const iframe = e.currentTarget;
                                             sendCommand(iframe, 'playVideo');
+                                        } else {
+                                            // Explicitly pause if preloading in background
+                                            sendCommand(iframe, 'pauseVideo');
                                         }
                                     }}
                                  />
