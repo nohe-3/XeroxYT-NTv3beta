@@ -288,29 +288,19 @@ const ShortsPage: React.FC = () => {
 
     return (
         <div className={`shorts-container flex justify-center items-center h-[calc(100vh-3.5rem)] w-full overflow-hidden relative ${theme.includes('glass') ? 'bg-transparent' : 'bg-yt-white dark:bg-yt-black'}`}>
-            {context?.type === 'channel' && context.channelId && (
-                <Link
-                    to={`/channel/${context.channelId}`}
-                    className="absolute left-4 md:left-[calc(50%-25rem)] top-1/4 -translate-y-1/2 z-20 flex items-center gap-2 px-3 py-1.5 bg-black/40 text-white text-sm font-semibold rounded-full backdrop-blur-sm hover:bg-black/60 transition-colors"
-                    title="チャンネルページに戻る"
-                >
-                    <BackArrowIcon />
-                    <span>戻る</span>
-                </Link>
-            )}
-            <button
-                onClick={handlePrev}
-                disabled={currentIndex === 0}
-                className="absolute left-4 md:left-[calc(50%-25rem)] top-1/2 -translate-y-1/2 z-20 p-4 rounded-full bg-black/20 hover:bg-black/40 backdrop-blur-sm transition-all shadow-lg flex items-center justify-center opacity-70 hover:opacity-100 hover:scale-110 active:scale-95 disabled:opacity-0 disabled:cursor-not-allowed"
-                title="前の動画"
-            >
-                <ChevronUpIcon />
-            </button>
-
             <div className="relative flex items-center justify-center gap-4 h-full w-full max-w-7xl mx-auto px-2 sm:px-4">
                 <div className="relative h-[85vh] max-h-[900px] aspect-[9/16] rounded-2xl shadow-2xl overflow-hidden bg-black flex-shrink-0 z-10">
+                    {context?.type === 'channel' && context.channelId && (
+                        <Link
+                            to={`/channel/${context.channelId}`}
+                            className="absolute top-4 left-4 z-30 flex items-center gap-2 px-3 py-1.5 bg-black/40 text-white text-sm font-semibold rounded-full backdrop-blur-sm hover:bg-black/60 transition-colors"
+                            title="チャンネルページに戻る"
+                        >
+                            <BackArrowIcon />
+                            <span>戻る</span>
+                        </Link>
+                    )}
                      {videos.map((video, index) => {
-                         // Render previous, current, and next 10 videos for pre-loading
                          if (index < currentIndex) return null;
                          if (index > currentIndex + 10) return null;
                          
@@ -384,9 +374,17 @@ const ShortsPage: React.FC = () => {
             </div>
 
             <button
+                onClick={handlePrev}
+                disabled={currentIndex === 0}
+                className="absolute left-4 top-1/2 -translate-y-1/2 z-20 p-4 rounded-full bg-black/20 hover:bg-black/40 backdrop-blur-sm transition-all shadow-lg flex items-center justify-center opacity-70 hover:opacity-100 hover:scale-110 active:scale-95 disabled:opacity-0 disabled:cursor-not-allowed"
+                title="前の動画"
+            >
+                <ChevronUpIcon />
+            </button>
+            <button
                 onClick={handleNext}
                 disabled={currentIndex >= videos.length - 1 && !isFetchingMore}
-                className="absolute right-4 md:right-[calc(50%-25rem)] top-1/2 -translate-y-1/2 z-20 p-4 rounded-full bg-black/20 hover:bg-black/40 backdrop-blur-sm transition-all shadow-lg flex items-center justify-center opacity-70 hover:opacity-100 hover:scale-110 active:scale-95 disabled:opacity-0 disabled:cursor-not-allowed"
+                className="absolute right-4 top-1/2 -translate-y-1/2 z-20 p-4 rounded-full bg-black/20 hover:bg-black/40 backdrop-blur-sm transition-all shadow-lg flex items-center justify-center opacity-70 hover:opacity-100 hover:scale-110 active:scale-95 disabled:opacity-0 disabled:cursor-not-allowed"
                 title="次の動画"
             >
                 <ChevronDownIcon />
