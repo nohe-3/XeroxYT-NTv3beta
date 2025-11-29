@@ -363,6 +363,64 @@ app.get('/api/playlist', async (req, res) => {
   }
 });
 
+// -------------------------------------------------------------------
+// おすすめショート動画 API (/api/fshorts?page=x)
+// 日本向け・10本ずつ・page対応
+// -------------------------------------------------------------------
+app.get('/api/fshorts', async (req, res) => {
+  try {
+    const youtube = await createYoutube();
+    const { page = '1' } = req.query;
+
+    const targetPage = parseInt(page);
+    const PAGE_SIZE = 10;
+
+    let home = await youtube.getHomeFeed();
+    let shorts = [];
+
+    // まず1ページ目（最初のブロック）からShorts抽出
+    if (home.videos) {
+      for (const v of home.videos) {
+        if (v.is_short) shorts.push(v);
+      }
+    }
+
+    // 必要なShorts数がそろうまで続きのページを読み込む
+    let attempts = 0;
+    const REQUIRED = targetPage * PAGE_SIZE;
+
+    while (shorts.length < REQUIRED && home.has_continuation && attempts < 10) {
+      home = await home.getContinuation();
+
+      if (home.videos) {
+        for (const v of home.videos) {
+          if (v.is_short) shorts.push(v);
+        }
+      }
+
+      attempts++;
+    }
+
+    // ページ分のデータを切り出す
+    const start = (targetPage - 1) * PAGE_SIZE;
+    const end = start + PAGE_SIZE;
+
+    const pagedShorts = shorts.slice(start, end);
+
+    const hasMore = shorts.length > end || home.has_continuation;
+
+    res.status(200).json({
+      page: targetPage,
+      shorts: pagedShorts,
+      hasMore
+    });
+
+  } catch (err) {
+    console.error("Error in /api/fshorts:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/shorts', async (req, res) => {
   try {
     const youtube = await createYoutube();
