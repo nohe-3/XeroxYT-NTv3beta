@@ -364,18 +364,17 @@ app.get('/api/playlist', async (req, res) => {
 });
 
 // -------------------------------------------------------------------
-// ホームフィード RAW そのまま返す API
-// ショート抽出なし / 加工なし / RAW データ
-// (/api/fshorts?page=x)
+// ゲストモード Shorts 抽出 API (/api/fshorts)
+// ホームフィードから Shorts だけ取り出す
 // -------------------------------------------------------------------
 app.get('/api/fshorts', async (req, res) => {
   try {
     const youtube = await createYoutube();
-    const { page = '1' } = req.query;
+    const { page = '1', limit = '10' } = req.query;
 
     let feed = await youtube.getHomeFeed();
 
-    // page > 1 の場合 continuation 多めに進める
+    // ページ送り処理
     let targetPage = parseInt(page);
     let currentPage = 1;
 
@@ -384,11 +383,44 @@ app.get('/api/fshorts', async (req, res) => {
       currentPage++;
     }
 
-    // ★ここが重要：加工せず完全RAWで返す
+    // ------------------------------
+    // Shorts 抽出処理
+    // ------------------------------
+    const shorts = [];
+
+    const extractShorts = (obj) => {
+      if (!obj) return;
+
+      if (Array.isArray(obj)) {
+        obj.forEach(extractShorts);
+        return;
+      }
+
+      // Shorts セクション
+      if (obj.type === "Shorts") {
+        if (Array.isArray(obj.items)) {
+          shorts.push(...obj.items);
+        }
+      }
+
+      // 深いネストに備える
+      if (typeof obj === "object") {
+        for (const key in obj) {
+          extractShorts(obj[key]);
+        }
+      }
+    };
+
+    extractShorts(feed);
+
+    const max = parseInt(limit);
+    const resultShorts = shorts.slice(0, max);
+
     res.status(200).json({
       page: targetPage,
+      count: resultShorts.length,
       hasMore: feed.has_continuation,
-      raw: feed // ←そのまま丸ごと返す
+      shorts: resultShorts
     });
 
   } catch (err) {
