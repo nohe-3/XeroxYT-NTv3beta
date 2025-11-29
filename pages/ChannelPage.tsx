@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 // FIX: Use named imports for react-router-dom components and hooks.
 import { useParams, Link } from 'react-router-dom';
-import { getChannelDetails, getChannelVideos, getChannelHome, mapHomeVideoToVideo, getPlayerConfig, getChannelShorts } from '../utils/api';
+import { getChannelDetails, getChannelVideos, getChannelHome, mapHomeVideoToVideo, getChannelShorts, getPlayerConfig } from '../utils/api';
 import type { ChannelDetails, Video, Channel, ChannelHomeData } from '../types';
 import VideoGrid from '../components/VideoGrid';
 import VideoCard from '../components/VideoCard';
@@ -24,11 +25,11 @@ const ChannelPage: React.FC = () => {
     const [homeData, setHomeData] = useState<ChannelHomeData | null>(null);
     const [videos, setVideos] = useState<Video[]>([]);
     const [shorts, setShorts] = useState<Video[]>([]);
+    const [playerParams, setPlayerParams] = useState<string | null>(null);
     
     const [videosPageToken, setVideosPageToken] = useState<string | undefined>('1');
     const [isFetchingMore, setIsFetchingMore] = useState(false);
     const [isTabLoading, setIsTabLoading] = useState(false);
-    const [playerParams, setPlayerParams] = useState<string | null>(null);
     
     const { isSubscribed, subscribe, unsubscribe } = useSubscription();
     const { addNgChannel, removeNgChannel, isNgChannel } = usePreference();
@@ -44,13 +45,11 @@ const ChannelPage: React.FC = () => {
             setVideosPageToken('1');
             setActiveTab('home');
             
-            const paramsPromise = getPlayerConfig();
-            const detailsPromise = getChannelDetails(channelId);
-            
             try {
-                const [params, details] = await Promise.all([paramsPromise, detailsPromise]);
-                setPlayerParams(params);
+                const details = await getChannelDetails(channelId);
                 setChannelDetails(details);
+                const params = await getPlayerConfig();
+                setPlayerParams(params);
             } catch (err: any) {
                 setError(err.message || 'チャンネルデータの読み込みに失敗しました。');
                 console.error(err);
@@ -208,19 +207,15 @@ const ChannelPage: React.FC = () => {
                 {homeData.topVideo && (
                     <div className="flex flex-col md:flex-row gap-4 md:gap-6 border-b border-yt-spec-light-20 dark:border-yt-spec-20 pb-6">
                          <div className="w-full md:w-[360px] lg:w-[420px] aspect-video rounded-xl overflow-hidden flex-shrink-0 bg-yt-black shadow-lg">
-                            {playerParams ? (
+                            {playerParams && (
                                 <iframe 
                                     src={`https://www.youtubeeducation.com/embed/${homeData.topVideo.videoId}${playerParams}`}
-                                    title={homeData.topVideo.title}
-                                    frameBorder="0"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowFullScreen
+                                    title={homeData.topVideo.title} 
+                                    frameBorder="0" 
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                    allowFullScreen 
                                     className="w-full h-full"
                                 ></iframe>
-                            ) : (
-                                <Link to={`/watch/${homeData.topVideo.videoId}`}>
-                                    <img src={homeData.topVideo.thumbnail} alt={homeData.topVideo.title} className="w-full h-full object-cover" />
-                                </Link>
                             )}
                         </div>
                         <div className="flex-1 py-1 md:py-2 min-w-0">
@@ -242,7 +237,7 @@ const ChannelPage: React.FC = () => {
                                 <span>{homeData.topVideo.published}</span>
                             </div>
                             
-                            <p className="text-sm text-yt-light-gray line-clamp-3 md:line-clamp-4 whitespace-pre-line hidden md:block">
+                            <p className="text-sm text-yt-light-gray line-clamp-2 whitespace-pre-line hidden md:block">
                                 {homeData.topVideo.description?.replace(/<br\s*\/?>/gi, '\n')}
                             </p>
                         </div>
