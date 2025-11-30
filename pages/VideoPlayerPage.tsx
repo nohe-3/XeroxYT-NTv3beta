@@ -368,7 +368,7 @@ const VideoPlayerPage: React.FC = () => {
                     </div>
 
                     {/* Description Box */}
-                    <div className={`mt-2 bg-yt-light dark:bg-[#272727] p-3 rounded-xl text-sm cursor-pointer hover:bg-[#e5e5e5] dark:hover:bg-[#3f3f3f] transition-colors ${isDescriptionExpanded ? '' : 'h-24 overflow-hidden relative'}`} onClick={() => setIsDescriptionExpanded(prev => !prev)}>
+                    <div className={`mt-4 bg-yt-spec-light-10 dark:bg-yt-dark-gray p-3 rounded-xl text-sm cursor-pointer hover:bg-yt-spec-light-20 dark:hover:bg-yt-gray transition-colors ${isDescriptionExpanded ? '' : 'h-24 overflow-hidden relative'}`} onClick={() => setIsDescriptionExpanded(prev => !prev)}>
                         <div className="font-bold mb-2 text-black dark:text-white">
                             {videoDetails.views}  •  {videoDetails.uploadedAt}
                         </div>
@@ -376,7 +376,7 @@ const VideoPlayerPage: React.FC = () => {
                             <div dangerouslySetInnerHTML={{ __html: videoDetails.description }} />
                         </div>
                         {!isDescriptionExpanded && (
-                            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-yt-light dark:from-[#272727] to-transparent flex items-end p-3 font-semibold">
+                            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-yt-spec-light-10 dark:from-yt-dark-gray to-transparent flex items-end p-3 font-semibold">
                                 もっと見る
                             </div>
                         )}

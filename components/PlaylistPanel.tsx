@@ -36,7 +36,7 @@ const PlaylistPanel: React.FC<PlaylistPanelProps> = ({ playlist, videos, current
   }
 
   return (
-    <div className="bg-yt-light dark:bg-yt-dark-gray rounded-xl overflow-hidden flex flex-col h-[calc(100vh-8rem)]">
+    <div className="bg-yt-spec-light-10 dark:bg-yt-dark-gray rounded-xl overflow-hidden flex flex-col h-[calc(100vh-8rem)]">
       <div className="p-4 border-b border-yt-spec-light-20 dark:border-yt-spec-20">
         <h2 className="text-xl font-bold truncate">{playlist.name}</h2>
         <p className="text-sm text-yt-light-gray">{authorName}</p>
