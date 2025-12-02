@@ -51,8 +51,58 @@ const VideoPlayerPage: React.FC = () => {
         setIsLoop(searchParams.get('loop') === '1');
     }, [searchParams]);
     
-    // Playlist auto-advance logic has been removed as it requires the YouTube IFrame Player API,
-    // which is not compatible with the requested 'youtubeeducation.com' host.
+    // Auto-advance logic for playlist
+    const handleVideoEnd = useCallback(() => {
+        if (!currentPlaylist || playlistVideos.length === 0) return;
+
+        const currentIndex = playlistVideos.findIndex(v => v.id === videoId);
+        let nextIndex = -1;
+
+        if (isShuffle) {
+             // Simple random selection
+             if (playlistVideos.length > 1) {
+                 do {
+                     nextIndex = Math.floor(Math.random() * playlistVideos.length);
+                 } while (nextIndex === currentIndex);
+             } else {
+                 nextIndex = 0;
+             }
+        } else {
+            nextIndex = currentIndex + 1;
+        }
+
+        if (nextIndex >= playlistVideos.length) {
+            if (isLoop) {
+                nextIndex = 0;
+            } else {
+                return; // End of playlist
+            }
+        }
+
+        const nextVideo = playlistVideos[nextIndex];
+        if (nextVideo) {
+            navigate(`/watch/${nextVideo.id}?list=${playlistId}${isShuffle ? '&shuffle=1' : ''}${isLoop ? '&loop=1' : ''}`);
+        }
+    }, [currentPlaylist, playlistVideos, videoId, isShuffle, isLoop, playlistId, navigate]);
+
+    // Listen for messages from the YouTube player iframe to detect when video ends
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            if (typeof event.data !== 'string') return;
+            try {
+                const data = JSON.parse(event.data);
+                // "info": 0 corresponds to YT.PlayerState.ENDED
+                if (data.event === 'onStateChange' && data.info === 0) {
+                    handleVideoEnd();
+                }
+            } catch (e) {
+                // Ignore non-JSON messages or other errors
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, [handleVideoEnd]);
 
     useEffect(() => {
         const fetchConfig = async () => {
@@ -60,13 +110,14 @@ const VideoPlayerPage: React.FC = () => {
                 const paramsString = await getPlayerConfig();
                 const params = new URLSearchParams(paramsString);
                 
-                // Ensure autoplay is enabled for a better user experience.
+                // Ensure autoplay is enabled and enablejsapi is set for postMessage events
                 params.set('autoplay', '1');
+                params.set('enablejsapi', '1');
                 
                 setPlayerParams(params.toString());
             } catch (error) {
                 console.error("Failed to fetch player config, using defaults", error);
-                setPlayerParams('autoplay=1&rel=0');
+                setPlayerParams('autoplay=1&rel=0&enablejsapi=1');
             }
         };
         fetchConfig();
