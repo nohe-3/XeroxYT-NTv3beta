@@ -27,12 +27,18 @@ const VideoPlayerPage: React.FC = () => {
     const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
     const [isPlaylistModalOpen, setIsPlaylistModalOpen] = useState(false);
     const [playerParams, setPlayerParams] = useState<string | null>(null);
+    
+    // Playlist State
     const [playlistVideos, setPlaylistVideos] = useState<Video[]>([]);
+    const [shuffledVideos, setShuffledVideos] = useState<Video[]>([]);
+    
     const [isCollaboratorMenuOpen, setIsCollaboratorMenuOpen] = useState(false);
     const collaboratorMenuRef = useRef<HTMLDivElement>(null);
     
+    // Shuffle & Loop State
     const [isShuffle, setIsShuffle] = useState(searchParams.get('shuffle') === '1');
     const [isLoop, setIsLoop] = useState(searchParams.get('loop') === '1');
+    const shuffleSeedRef = useRef<string | null>(null); // To track stable shuffle session
 
     const { isSubscribed, subscribe, unsubscribe } = useSubscription();
     const { addVideoToHistory } = useHistory();
@@ -43,11 +49,13 @@ const VideoPlayerPage: React.FC = () => {
         return playlists.find(p => p.id === playlistId) || null;
     }, [playlistId, playlists]);
 
+    // Sync URL params to state
     useEffect(() => {
         setIsShuffle(searchParams.get('shuffle') === '1');
         setIsLoop(searchParams.get('loop') === '1');
     }, [searchParams]);
     
+    // Fetch Player Config
     useEffect(() => {
         const fetchPlayerParams = async () => {
             setPlayerParams(await getPlayerConfig());
@@ -55,6 +63,7 @@ const VideoPlayerPage: React.FC = () => {
         fetchPlayerParams();
     }, []);
 
+    // Collaborator Menu Click Outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (collaboratorMenuRef.current && !collaboratorMenuRef.current.contains(event.target as Node)) {
@@ -67,6 +76,7 @@ const VideoPlayerPage: React.FC = () => {
         };
     }, []);
 
+    // Fetch Playlist Videos
     useEffect(() => {
         const fetchPlaylistVideos = async () => {
             if (currentPlaylist) {
@@ -85,6 +95,40 @@ const VideoPlayerPage: React.FC = () => {
         fetchPlaylistVideos();
     }, [currentPlaylist]);
 
+    // Stable Shuffle Logic
+    useEffect(() => {
+        // Reset shuffle if disabled or playlist changes
+        if (!isShuffle || !playlistId) {
+            setShuffledVideos([]);
+            shuffleSeedRef.current = null;
+            return;
+        }
+
+        // If we already have a shuffled list for this playlist session, don't reshuffle on every navigation
+        if (shuffleSeedRef.current === playlistId && shuffledVideos.length > 0) {
+            return;
+        }
+
+        if (playlistVideos.length > 0) {
+            const currentIndex = playlistVideos.findIndex(v => v.id === videoId);
+            const newOrder = [...playlistVideos];
+            
+            // If current video is found, make it first, then shuffle the rest
+            if (currentIndex !== -1) {
+                const current = newOrder[currentIndex];
+                newOrder.splice(currentIndex, 1);
+                newOrder.sort(() => Math.random() - 0.5);
+                newOrder.unshift(current);
+            } else {
+                 newOrder.sort(() => Math.random() - 0.5);
+            }
+            
+            setShuffledVideos(newOrder);
+            shuffleSeedRef.current = playlistId;
+        }
+    }, [isShuffle, playlistVideos, videoId, playlistId, shuffledVideos.length]);
+
+    // Fetch Video Details
     useEffect(() => {
         let isMounted = true;
 
@@ -150,14 +194,66 @@ const VideoPlayerPage: React.FC = () => {
         };
     }, [videoId, addVideoToHistory]);
 
-    const shuffledPlaylistVideos = useMemo(() => {
-        if (!isShuffle || playlistVideos.length === 0) return playlistVideos;
-        const currentIndex = playlistVideos.findIndex(v => v.id === videoId);
-        if (currentIndex === -1) return [...playlistVideos].sort(() => Math.random() - 0.5);
-        const otherVideos = [...playlistVideos.slice(0, currentIndex), ...playlistVideos.slice(currentIndex + 1)];
-        const shuffledOthers = otherVideos.sort(() => Math.random() - 0.5);
-        return [playlistVideos[currentIndex], ...shuffledOthers];
-    }, [isShuffle, playlistVideos, videoId]);
+    // Navigation Logic
+    const navigateToNextVideo = useCallback(() => {
+        if (!currentPlaylist || playlistVideos.length === 0) return;
+
+        const currentList = isShuffle ? shuffledVideos : playlistVideos;
+        if (currentList.length === 0) return;
+
+        const currentIndex = currentList.findIndex(v => v.id === videoId);
+        
+        let nextIndex = -1;
+        if (currentIndex !== -1) {
+            nextIndex = currentIndex + 1;
+        } else {
+             // Fallback: start from 0 if current not found
+             nextIndex = 0;
+        }
+
+        if (nextIndex >= currentList.length) {
+            if (isLoop) {
+                nextIndex = 0;
+            } else {
+                return; // End of playlist
+            }
+        }
+        
+        const nextVideo = currentList[nextIndex];
+        if (nextVideo) {
+             const newParams = new URLSearchParams(searchParams);
+             // Ensure shuffle/loop state persists
+             if (isShuffle) newParams.set('shuffle', '1');
+             if (isLoop) newParams.set('loop', '1');
+             
+             navigate(`/watch/${nextVideo.id}?${newParams.toString()}`);
+        }
+    }, [currentPlaylist, playlistVideos, isShuffle, shuffledVideos, videoId, isLoop, navigate, searchParams]);
+
+    // Iframe Event Listener for Auto-Advance
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            // Robustly parse the message
+            let data = event.data;
+            if (typeof data === 'string') {
+                try {
+                    data = JSON.parse(data);
+                } catch (e) {
+                    return; // Not JSON
+                }
+            }
+
+            // Check for YouTube State Change event
+            // data.info === 0 corresponds to YT.PlayerState.ENDED
+            if (data && data.event === 'onStateChange' && data.info === 0) {
+                navigateToNextVideo();
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, [navigateToNextVideo]);
+
 
     const iframeSrc = useMemo(() => {
         if (!videoDetails?.id || !playerParams) return '';
@@ -170,64 +266,18 @@ const VideoPlayerPage: React.FC = () => {
         }
         // Add origin to ensure we can receive messages from the iframe
         if (!params.includes('origin')) {
-            params += `&origin=${window.location.origin}`;
+            params += `&origin=${encodeURIComponent(window.location.origin)}`;
         }
         
-        // Note: We deliberately DO NOT add the &playlist= parameter here.
-        // We handle playlist navigation manually via React Router to ensure
-        // the page title, comments, and related videos update correctly when the video changes.
-        
+        // Add autoplay=1 explicitly if not present to ensure smooth playlist transition
+        if (!params.includes('autoplay')) {
+            params += '&autoplay=1';
+        }
+
+        // We DO NOT add &playlist= here. We handle navigation in React.
         return `${src}?${params}`;
     }, [videoDetails, playerParams]);
     
-    // Function to handle navigation to the next video
-    const navigateToNextVideo = useCallback(() => {
-        if (!currentPlaylist || playlistVideos.length === 0) return;
-
-        const currentList = isShuffle ? shuffledPlaylistVideos : playlistVideos;
-        const currentIndex = currentList.findIndex(v => v.id === videoId);
-        
-        if (currentIndex === -1) return;
-
-        let nextIndex = currentIndex + 1;
-        if (nextIndex >= currentList.length) {
-            if (isLoop) {
-                nextIndex = 0;
-            } else {
-                return; // End of playlist
-            }
-        }
-        
-        const nextVideo = currentList[nextIndex];
-        if (nextVideo) {
-             const newParams = new URLSearchParams(searchParams);
-             if (isShuffle) newParams.set('shuffle', '1');
-             if (isLoop) newParams.set('loop', '1');
-             
-             navigate(`/watch/${nextVideo.id}?${newParams.toString()}`);
-        }
-    }, [currentPlaylist, playlistVideos, isShuffle, shuffledPlaylistVideos, videoId, isLoop, navigate, searchParams]);
-
-    // Listen for YouTube Iframe API 'onStateChange' events to detect video end
-    useEffect(() => {
-        const handleMessage = (event: MessageEvent) => {
-            try {
-                if (typeof event.data === 'string') {
-                    const data = JSON.parse(event.data);
-                    // data.info === 0 corresponds to YT.PlayerState.ENDED
-                    if (data.event === 'onStateChange' && data.info === 0) {
-                        navigateToNextVideo();
-                    }
-                }
-            } catch (e) {
-                // Ignore non-JSON messages
-            }
-        };
-
-        window.addEventListener('message', handleMessage);
-        return () => window.removeEventListener('message', handleMessage);
-    }, [navigateToNextVideo]);
-
     const updateUrlParams = (key: string, value: string | null) => {
         const newSearchParams = new URLSearchParams(searchParams);
         if (value === null) newSearchParams.delete(key);
@@ -236,9 +286,15 @@ const VideoPlayerPage: React.FC = () => {
     };
 
     const toggleShuffle = () => {
+        // Toggle state
         const newShuffleState = !isShuffle;
         setIsShuffle(newShuffleState);
         updateUrlParams('shuffle', newShuffleState ? '1' : null);
+        
+        // Force re-seed of shuffle logic when toggling on
+        if (newShuffleState) {
+            shuffleSeedRef.current = null;
+        }
     };
 
     const toggleLoop = () => {
@@ -306,7 +362,16 @@ const VideoPlayerPage: React.FC = () => {
             <div className="flex-1 min-w-0 max-w-full">
                 {/* Video Player Area */}
                 <div className="w-full aspect-video bg-yt-black rounded-xl overflow-hidden shadow-lg relative z-10">
-                    <iframe src={iframeSrc} key={iframeSrc} title={videoDetails.title} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen className="w-full h-full"></iframe>
+                    <iframe 
+                        id="player"
+                        src={iframeSrc} 
+                        key={iframeSrc} 
+                        title={videoDetails.title} 
+                        frameBorder="0" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                        allowFullScreen 
+                        className="w-full h-full"
+                    ></iframe>
                 </div>
 
                 <div className="">
@@ -457,7 +522,7 @@ const VideoPlayerPage: React.FC = () => {
             {/* Sidebar: Playlist & Related Videos */}
             <div className="w-full lg:w-[350px] xl:w-[400px] flex-shrink-0 flex flex-col gap-4 pb-10">
                 {currentPlaylist && (
-                     <PlaylistPanel playlist={currentPlaylist} authorName={currentPlaylist.authorName} videos={playlistVideos} currentVideoId={videoId} isShuffle={isShuffle} isLoop={isLoop} toggleShuffle={toggleShuffle} toggleLoop={toggleLoop} onReorder={handlePlaylistReorder} />
+                     <PlaylistPanel playlist={currentPlaylist} authorName={currentPlaylist.authorName} videos={isShuffle ? shuffledVideos : playlistVideos} currentVideoId={videoId} isShuffle={isShuffle} isLoop={isLoop} toggleShuffle={toggleShuffle} toggleLoop={toggleLoop} onReorder={handlePlaylistReorder} />
                 )}
                 
                 {/* Filter Chips (Visual only) */}
